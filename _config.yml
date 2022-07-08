@@ -28,7 +28,7 @@ twitter_username: JKTKops
 github_username:  JKTKops
 
 # Build settings
-theme: midnight
+theme: jekyll-theme-midnight
 plugins:
   - jekyll-feed
 
