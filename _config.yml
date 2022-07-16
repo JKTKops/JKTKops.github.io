@@ -21,7 +21,7 @@
 title: Max Kopinsky
 email: jktkops@gmail.com
 description: >- # this means to ignore newlines until "baseurl:"
-    Functional Programming, Formal Methods, Computer Architecture, Systems, and Math!
+    Functional Programming, Formal Methods, Computer Architecture, and Math!
 baseurl: "/" # the subpath of your site, e.g. /blog
 url: "https://maxkopinsky.com" # the base hostname & protocol for your site, e.g. http://example.com
 twitter_username: JKTKops

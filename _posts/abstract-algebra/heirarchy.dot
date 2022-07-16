@@ -1,0 +1,26 @@
+digraph Heirarchy {
+    label = "The Heirarchy of Algebraic Structures";
+    bgcolor="transparent";
+    fontcolor="white";
+
+    node [ shape=box, color="white", fontcolor="white" ];
+    edge [ color="white" ];
+
+    abelian     [ label="abelian group" ];
+    comm_monoid [ label="commutative monoid" ];
+    unit_magma  [ label="unital magma" ];
+    small_cat   [ label="small category" ];
+
+    abelian     -> { comm_monoid group };
+    comm_monoid ->   monoid;
+    group       -> { monoid loop groupoid };
+    monoid      -> { semigroup unit_magma small_cat };
+    loop        -> { unit_magma quasigroup };
+    groupoid    ->   small_cat;
+    semigroup   -> { magma semigroupoid };
+    unit_magma  ->   magma;
+    small_cat   ->   semigroupoid;
+    quasigroup  ->   magma;
+
+    { semigroupoid magma } -> set;
+}

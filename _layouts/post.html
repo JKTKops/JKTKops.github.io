@@ -14,6 +14,30 @@
     <!--[if lt IE 8]>
     <link rel="stylesheet" href="{{ '/assets/css/ie.css' | relative_url }}">
     <![endif]-->
+    <!-- for mathjax -->
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({
+        extensions: [
+            "MathMenu.js",
+            "MathZoom.js",
+            "AssistiveMML.js",
+            "a11y/accessibility-menu.js"
+        ],
+        jax: ["input/TeX", "output/CommonHTML"],
+        TeX: {
+            extensions: [
+                "AMSmath.js",
+                "AMSsymbols.js",
+                "noErrors.js",
+                "noUndefined.js",
+            ]
+        }
+    });
+    </script>
+    <script type="text/javascript" async
+       src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML">
+    </script>
+    
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 
   </head>
@@ -36,28 +60,28 @@
           <h1>{{ site.title | default: site.github.repository_name }}</h1>
           <p>{{ site.description | default: site.github.project_tagline }}</p>
           <hr>
-       </div>
+        </div>
+
+        <h1>{{ page.title }}</h1>
 
         {{ content }}
 
         <div class="PageNavigation">
-            {% if page.previous or page.next %}
+            {% if page.previous_in_category or page.next_in_category %}
             <hr>
             {% endif %}
-            {% if page.previous %}
+            {% if page.previous_in_category %}
+            {% assign ppage = page.previous_in_category %}
             <div class="left">
-                {% assign t = page.previous %}
-                {% assign ppage = site.pages | where:'title', t | first %}
                 <div>Previous</div>
-                <a href="{{ ppage.url | relative_url }}">{{ t }}</a>
+                <a href="{{ ppage.url | relative_url }}">{{ ppage.title }}</a>
             </div>
             {% endif %}
-            {% if page.next %}
+            {% if page.next_in_category %}
+            {% assign npage = page.next_in_cateogry %}
             <div class="right">
-                {% assign t = page.next %}
-                {% assign npage = site.pages | where:'title', t | first %}
                 <div>Next</div>
-                <a href="{{ npage.url | relative_url }}">{{ t }}</a>
+                <a href="{{ npage.url | relative_url }}">{{ npage.title }}</a>
             </div>
             {% endif %}
         </div>
