@@ -92,7 +92,7 @@ Let's propose some additional properties for addition:
 2. If $$x + y = z$$, then $$y + x = z$$ as well.
 3. If $$(w + x) + y = z$$, then $$w + (x + y) = z$$ as well.
 
-Let's suppose we have any model $$(D, \sigma)$$ of the Peano axioms. This notation means that the carrier set is $$D$$, along with the operation $$\sigma$$ for counting. We can define addition as follows:
+Let's suppose we have any model $$(D, 0, \sigma)$$ of the Peano axioms. This notation means that the carrier set is $$D$$, along with the designated value $$0$$ and the operation $$\sigma$$ for counting. We can define addition as follows:
 
 $$\begin{align} a + 0 &= a, \\ a + \sigma(b) &= \sigma(a + b). \end{align}$$
 
