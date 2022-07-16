@@ -127,7 +127,7 @@ Some of the richest - and most practical - structures arise from single-domain, 
 
 <img src="/assets/abstract-algebra/heirarchy.svg">
 
-The structure we've been talking about here is a commutative monoid. In fact, it is _the_ commutative monoid, but we haven't developed the language to talk about what uniqueness even means here yet. As we continue to develop the language of abstract algebra, we will learn conceptually exactly what that means.
+The structure we've been talking about here is a commutative monoid. As we continue to develop the language of abstract algebra, we will learn conceptually exactly what that means.
 
 Hopefully I've piqued your interest! In the next few posts we will describe each type of structure in the diagram and the arrows that it points to. That is, I want to describe each structure in terms of what it _adds_ to something that we are already familiar with. As we get further down the line, we will see how identifying these types of structures can improve programs, clarify ideas, and help us make deep observations about the nature of (mathematical) existence.
 
