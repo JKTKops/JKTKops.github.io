@@ -362,6 +362,8 @@ I'm going to leave this post off here to avoid it getting _too_ long. In the nex
 look at unital magma and quasigroups. Then we'll get to the interesting stuff that comes up in programming
 and in life all the time - monoids and groups.
 
+--------
+
 [^1]: It is really important that we show the models contain the same information. We could have
       two different models of a structure which _do not_ contain the same information, and that difference
       in information might make the properties true in one model but false in the other!
