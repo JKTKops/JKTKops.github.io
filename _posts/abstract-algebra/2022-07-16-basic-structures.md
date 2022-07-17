@@ -243,10 +243,6 @@ semigroupoid laws don't say we have to.
 Since arrows describe paths between nodes, it's pretty common to only draw the minimal number of arrows and leave
 the combined paths as implied. In the complex graph, we could omit arrows $$2 \to 2, 4 \to 4, 1 \to 3, 2 \to 3,$$ and $$1 \to 4$$.
 
-These are respectively called the left identity equation and the right identity equation. For the arrow
-$$a \to b$$, the arrow $$a \to a$$ is called a left identity and the arrow $$b \to b$$ is called a right
-identity.
-
 ## Small Categories: It Begins
 
 Small categories are where things really start getting interesting. For simplicity, I'm just going to call these
