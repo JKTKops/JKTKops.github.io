@@ -1,0 +1,22 @@
+digraph example {
+    bgcolor="transparent";
+    fontcolor="white";
+
+    node [ color="white", fontcolor="white" ];
+    edge [ color="white" ];
+
+    subgraph cluster_A {
+        label = "simple";
+
+        a -> { b c };
+        b ->   c;
+    };
+
+    subgraph cluster_B {
+        label = "complex";
+
+        1 -> { 2 3 4 };
+        2 -> { 2 3 4 };
+        4 -> { 2 3 4 }; 
+    };
+}

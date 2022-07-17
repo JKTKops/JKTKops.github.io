@@ -1,0 +1,26 @@
+digraph example {
+    bgcolor="transparent";
+    fontcolor="white";
+
+    node [ color="white", shape=point ];
+    edge [ color="white"];
+
+    subgraph cluster_A {
+        label = "A";
+
+        Aroot;
+    };
+
+    subgraph cluster_B {
+        label = "B";
+
+        Broot -> {left1 right1};
+        right1 -> {right21 right22};
+    };
+
+    subgraph cluster_C {
+        label = "C";
+
+        Croot -> {left right};
+    }
+}

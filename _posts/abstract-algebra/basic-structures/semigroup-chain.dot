@@ -1,0 +1,12 @@
+digraph example {
+    bgcolor = "transparent";
+    fontcolor = "white";
+    label = "A left-biased binary tree";
+
+    node [ color="white", shape=point ];
+    edge [ color="white" ];
+
+    1 -> {2 3};
+    2 -> {4 5};
+    4 -> {6 7};
+}
