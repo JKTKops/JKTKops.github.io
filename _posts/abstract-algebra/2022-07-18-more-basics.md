@@ -133,7 +133,8 @@ We could describe any magma in this form, but our running example so far has use
 of binary trees, which is an infinite domain. Putting that in table form would be pretty tricky!
 However the magma described by this table is finite. The carrier set is just $$D = \{1,2,3,4\}$$.
 
-$$D$$, along with the multiplication table to define $$\cdot(-,-)$$[^3]. Since the operation is
+$$D$$, along with the multiplication table to define $$\cdot(-,-)$$[^3], form a magma.
+Since the operation is
 defined by a multiplication table, we could instead call the operation multiplication. Let's do
 that. While we're at it, we might as well use the multiplication symbol $$*$$.
 
