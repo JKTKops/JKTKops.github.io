@@ -1,14 +1,14 @@
 ---
 layout: post
 title: "Conceptual Overview of Basic Algebraic Structures"
-date: 2022-07-16 01:00:00
+date: 2022-07-16 23:00:00 -5
 categories: math algebra
 examples: "/assets/abstract-algebra/basic-structures"
 ---
 
 If you haven't seen the previous post in this series, and want
 an introduction to abstract algebra before getting into specific structures,
-you should check out [What is Abstract Algebra, Anyway?](./2022-07-16-what-is-abstract-algebra.md).
+you should check out [What is Abstract Algebra, Anyway?]({{ page.previous_in_category.url | relative }}).
 
 As a reminder, we'll be starting to explore the various single-domain, single binary operator
 algebraic structures in the following heirarchy.
@@ -125,7 +125,7 @@ def eval(exp: Tuple[int, Op, int]) -> int:
         case Add:
             return exp[0] + exp[2]
         case Times:
-            return exp[1] * exp[2]
+            return exp[0] * exp[2]
 ```
 
 And of course we can recover the result as a string with `str`, if we want to.

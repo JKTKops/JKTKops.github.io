@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "What is Abstract Algebra, Anyway?"
-date: 2022-07-16 00:00:00
+date: 2022-07-16 16:00:00 -5
 categories: math algebra
 ---
 
