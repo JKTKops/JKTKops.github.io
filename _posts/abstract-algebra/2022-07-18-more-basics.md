@@ -99,13 +99,13 @@ has _order_ 4.
 
 $$\begin{array}{|c|c|c|c|}
 \hline
-b & d & a & b \\
+b & d & c & a \\
 \hline
-a & c & b & d \\
+a & c & d & b \\
 \hline
-c & b & d & a \\
+c & b & a & d \\
 \hline
-d & a & c & b \\
+d & a & b & c \\
 \hline
 \end{array}$$
 
@@ -119,13 +119,13 @@ declare that $$x \cdot y$$ is the value in the row labeled $$x$$ and column labe
 $$\begin{array}{c||c|c|c|c|}
   & a & b & c & d \\
 \hline\hline
-a & b & d & a & b \\
+a & b & d & c & a \\
 \hline
-b & a & c & b & d \\
+b & a & c & d & b \\
 \hline
-c & c & b & d & a \\
+c & c & b & a & d \\
 \hline
-d & d & a & c & b \\
+d & d & a & b & c \\
 \hline
 \end{array}$$
 
@@ -142,14 +142,14 @@ For example, we have $$a * b = d$$. This pair of $$(D, *)$$ gives us a "finite m
 Take a moment and check: is this magma unital? Answer[^4]
 
 We should also check if this magma is _associative_, which would make it a semigroup. Randomly
-picking elements $$b, a, d$$, we can check:
+picking elements $$a, b, d$$, we can check:
 
 $$\begin{aligned}
-(b * a) * d &= a * d \\
-            &= b \\
-\\
-b * (a * d) &= b * b \\
+(a * b) * d &= d * d \\
             &= c \\
+\\
+a * (b * d) &= a * b \\
+            &= d \\
 \end{aligned}$$
 
 It's not associative!
