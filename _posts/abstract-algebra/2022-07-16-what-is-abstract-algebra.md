@@ -122,10 +122,10 @@ So we've shown that any system that supports _counting_ also supports _adding_. 
 
 Addition is a _binary_ operator. It takes two arguments, both natural numbers in this case, and produces a third natural number. Addition puts a much richer structure on the domain. Instead of only being able to say that $$3 \to 4$$, $$4 \to 5$$, and $$5 \to 6$$, we can now make much broader, more comprehensive statements like $$(3, 4) \to 7$$. And this doesn't only apply to numbers, but to _any_ set that it makes sense to "count." That's a very powerful result!
 
-Some of the richest - and most practical - structures arise from single-domain, binary-operator systems. Mathematicians define a whole heirarchy of such structures, starting with no properties at all (a set with no operation) and gradually increasing the requirements of the operation to become more and more specific. The significant parts of this heirarchy look like this.
+Some of the richest - and most practical - structures arise from single-domain, binary-operator systems. Mathematicians define a whole hierarchy of such structures, starting with no properties at all (a set with no operation) and gradually increasing the requirements of the operation to become more and more specific. The significant parts of this hierarchy look like this.
 
 
-<img src="/assets/abstract-algebra/heirarchy.svg">
+<img src="/assets/abstract-algebra/hierarchy.svg">
 
 The structure we've been talking about here is a commutative monoid. As we continue to develop the language of abstract algebra, we will learn conceptually exactly what that means.
 

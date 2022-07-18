@@ -1,5 +1,5 @@
-digraph Heirarchy {
-    label = "The Heirarchy of Algebraic Structures";
+digraph Hierarchy {
+    label = "The Hierarchy of Algebraic Structures";
     bgcolor="transparent";
     fontcolor="white";
 

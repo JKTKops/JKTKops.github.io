@@ -11,9 +11,9 @@ an introduction to abstract algebra before getting into specific structures,
 you should check out [What is Abstract Algebra, Anyway?]({{ page.previous_in_category.url | relative }}).
 
 As a reminder, we'll be starting to explore the various single-domain, single binary operator
-algebraic structures in the following heirarchy.
+algebraic structures in the following hierarchy.
 
-<img src="/assets/abstract-algebra/heirarchy.svg">
+<img src="/assets/abstract-algebra/hierarchy.svg">
 
 We'll start at the bottom and work our way up, talking about each arrow individually.
 Let's build some intuition!
@@ -285,7 +285,7 @@ from the Greek root _endo-_ meaning "within." This structure is incidentally mor
 
 ## Semigroups (from Semigroupoids): The Graph Collapses
 
-Every arrow in our original heirarchy[^5] represents adding a single new restriction to the operation $$\cdot$$.
+Every arrow in our original hierarchy[^5] represents adding a single new restriction to the operation $$\cdot$$.
 This time, we're taking a semigroupoid (which requires that the operation _associate_) and additionally require
 that the operation be _total_.
 

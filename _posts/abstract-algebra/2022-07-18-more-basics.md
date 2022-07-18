@@ -7,10 +7,10 @@ examples: "/assets/abstract-algebra/basic-structures"
 ---
 
 In [the last post]({{ page.previous_in_category.url | relative }}), we saw how we
-can view the heirarchy of algebraic structures as a system of adding requirements
+can view the hierarchy of algebraic structures as a system of adding requirements
 to the binary operator of each structure.
 
-<img src="/assets/abstract-algebra/heirarchy.svg">
+<img src="/assets/abstract-algebra/hierarchy.svg">
 
 In this post we'll wrap up our exploration of the bottom half with unital magma
 and quasigroups. Then we'll talk about loops and groupoids. Groupoids are where
