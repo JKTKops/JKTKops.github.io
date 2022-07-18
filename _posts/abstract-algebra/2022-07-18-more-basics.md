@@ -13,7 +13,9 @@ to the binary operator of each structure.
 <img src="/assets/abstract-algebra/heirarchy.svg">
 
 In this post we'll wrap up our exploration of the bottom half with unital magma
-and quasigroups. Then we'll start talking about the big guns: monoids.
+and quasigroups. Then we'll talk about loops and groupoids. Groupoids are where
+we really start getting enough interesting structure to make interesting statements
+about all groupoids at once.
 
 * TOC
 {: toc}
