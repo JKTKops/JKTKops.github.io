@@ -31,6 +31,7 @@ github_username:  JKTKops
 theme: jekyll-theme-midnight
 plugins:
   - jekyll-feed
+  - "jekyll-github-metadata"
 
 # Exclude from processing.
 # The following items will not be processed, by default.
