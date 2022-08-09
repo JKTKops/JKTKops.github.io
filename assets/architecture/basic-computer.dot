@@ -1,0 +1,18 @@
+digraph Computer {
+    label = "A Basic Computer";
+    bgcolor="transparent";
+    fontcolor="white";
+
+    node [ shape=box, color="white", fontcolor="white" ];
+    edge [ color="white" ];
+
+    PC [ label="Program Counter" ];
+    RF [ label="Register File" ];
+
+    PC -> Program -> Decoder;
+    RF -> {Memory, ALU, Test};
+    Memory -> RF;
+    ALU -> RF;
+    Test -> PC;
+    Decoder -> {RF, Memory, ALU, Test, PC};
+}
