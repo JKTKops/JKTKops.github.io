@@ -388,7 +388,7 @@ $$\begin{array}{|c|c|c|c|}
 
 We executed the unconditional jump immediately in the fetch stage (and have the decoder
 pass on a `NOP` instead of the now-useless `JMP`). As a result, the erroneous instruction
-never enters the pipeline at all, and we even finish one cycle faster. Nice!
+never enters the pipeline at all, and we even finish two cycles faster. Nice!
 
 What if that unconditional jump was a conditional branch? Let's not worry about types of
 conditional branches here; let's just assume that the same `JMP 2` instruction now needs
