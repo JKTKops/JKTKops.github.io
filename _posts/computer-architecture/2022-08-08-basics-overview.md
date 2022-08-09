@@ -421,7 +421,7 @@ register file. It's like the instructions never existed at all.
 
 A more advanced technique called _branch prediction_ attempts to guess whether or not
 a branch will be taken as soon as it is decoded, and gets the next instruction from the
-predicted location in the program. What we're doing is the same as predicted that all branches
+predicted location in the program. What we're doing is the same as predicting that all branches
 are not taken.
 
 It turns out that accurate branch prediction is _extremely_ important for performance in even
@@ -492,7 +492,7 @@ Finally, we've briefly discussed how slow memory is, and how we can use _caching
 to eliminate the large stalls associated with waiting for memory accesses.
 
 This crash-course overview covers more or less the same topics as a one-semester undergraduate
-computer architecture course. To avoid getting too mathematical, I covered branches in significantly
+computer architecture course. To avoid getting too mathematical, I covered caches in significantly
 less detail than such a course would.
 
 In future posts, we will take deep dives into particular advanced computer architecture techniques.
