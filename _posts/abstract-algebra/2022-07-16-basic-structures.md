@@ -163,7 +163,8 @@ them is _also_ a model of a magma. For the sake of example, though, let's consid
 is a magma and _only_ a magma: binary trees.
 
 A binary tree is a data structure where at any point, we either refer to two smaller binary trees,
-or to nothing. Some examples of this magma:
+or to nothing. The operation $$\cdot$$ combines its arguments as subtrees under a new node.
+Some examples of this magma:
 
 <center><img src="{{ page.examples }}/magma-examples.svg"></center>
 
