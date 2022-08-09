@@ -26,13 +26,14 @@ baseurl: "/" # the subpath of your site, e.g. /blog
 url: "https://maxkopinsky.com" # the base hostname & protocol for your site, e.g. http://example.com
 twitter_username: JKTKops
 github_username:  JKTKops
-repository: JKTKops/JKTKops.github.io
+site:
+  github:
+    repository_url: github.com/JKTKops/JKTKops.github.io
 
 # Build settings
 theme: jekyll-theme-midnight
 plugins:
   - jekyll-feed
-  - "jekyll-github-metadata"
 
 # Exclude from processing.
 # The following items will not be processed, by default.

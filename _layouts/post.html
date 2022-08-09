@@ -24,7 +24,9 @@
             "a11y/accessibility-menu.js"
         ],
         jax: ["input/TeX", "output/CommonHTML"],
+        loader: {load: ['[tex]/colortbl']},
         TeX: {
+            packages: {'[+]': ['colortbl']},
             extensions: [
                 "AMSmath.js",
                 "AMSsymbols.js",
