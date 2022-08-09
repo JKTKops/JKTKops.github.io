@@ -312,11 +312,11 @@ $$\begin{array}{|c|c|c|c|}
 \hline
 1 & \tt{ADD\ A,\ B,\ C} & - & - \\
 \hline
-2 & \tt{JMP 2} & \tt{ADD\ A,\ B,\ C} & - \\
+2 & \tt{JMP\ 2} & \tt{ADD\ A,\ B,\ C} & - \\
 \hline
-3 & \tt{ADD\ B,\ C,\ D} & \tt{JMP 2} & \tt{ADD\ A,\ B,\ C} \\
+3 & \tt{ADD\ B,\ C,\ D} & \tt{JMP\ 2} & \tt{ADD\ A,\ B,\ C} \\
 \hline
-4 & \tt{SUB\ C,\ B,\ A} & \tt{ADD\ B,\ C,\ D} & \tt{JMP 2} \\
+4 & \tt{SUB\ C,\ B,\ A} & \tt{ADD\ B,\ C,\ D} & \tt{JMP\ 2} \\
 \hline
 5 & \tt{SUB\ C,\ B,\ A} & \tt{SUB\ C,\ B,\ A} & \tt{ADD\ B,\ C,\ D} \\
 \hline
@@ -376,7 +376,7 @@ $$\begin{array}{|c|c|c|c|}
 \hline
 1 & \tt{ADD\ A,\ B,\ C} & - & - \\
 \hline
-2 & \tt{JMP 2} & \tt{ADD\ A,\ B,\ C} & - \\
+2 & \tt{JMP\ 2} & \tt{ADD\ A,\ B,\ C} & - \\
 \hline
 3 & \tt{SUB\ C,\ B,\ A} & \tt{NOP} & \tt{ADD\ A,\ B,\ C} \\
 \hline
@@ -400,11 +400,11 @@ $$\begin{array}{|c|c|c|c|}
 \hline
 1 & \tt{ADD\ A,\ B,\ C} & - & - \\
 \hline
-2 & \tt{JMP 2} & \tt{ADD\ A,\ B,\ C} & - \\
+2 & \tt{JMP\ 2} & \tt{ADD\ A,\ B,\ C} & - \\
 \hline
-3 & \tt{ADD\ B,\ C,\ D} & \tt{JMP 2} & \tt{ADD\ A,\ B,\ C} \\
+3 & \tt{ADD\ B,\ C,\ D} & \tt{JMP\ 2} & \tt{ADD\ A,\ B,\ C} \\
 \hline
-4 & \tt{SUB\ C,\ B,\ A} & \tt{ADD\ B,\ C,\ D} & \tt{JMP 2} \\
+4 & \tt{SUB\ C,\ B,\ A} & \tt{ADD\ B,\ C,\ D} & \tt{JMP\ 2} \\
 \hline
 5 & \tt{SUB\ C,\ B,\ A} & \tt{NOP} & \tt{NOP} \\
 \hline
