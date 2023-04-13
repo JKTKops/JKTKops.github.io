@@ -210,7 +210,7 @@ by pre-empting it - WAW Hazards also prevent pairing.
 
 ### WAR Hazards
 
-The last type of hazard is called a WAR Hazard, or write-after-read. These are also known as "false hazards," because they don't matter unless we start doing some pretty wacky things.
+The last type of data hazard is called a WAR Hazard, or write-after-read. These are also known as "false hazards," because they don't matter unless we start doing some pretty wacky things.
 
 The things we're doing here aren't wacky enough.
 
@@ -241,7 +241,7 @@ Let's look at the first case:
   j B
 ```
 
-If we allow these to pair, they will both enter the execute stage at the first time. Which one wins?
+If we allow these to pair, they will both enter the execute stage at the same time. Which one wins?
 
 For WAW hazards, the answer was that the V-pipe instruction wins.
 But here, we need the U-pipe instruction to win!
@@ -255,7 +255,7 @@ What about the second case?
 ```
 
 That `mov` instruction is a bit different from the other ones we've seen.
-The `[ax]` syntax means "the value in memory, at the address given by `ax`.
+The `[ax]` syntax means "the value **in memory** at the address given by `ax`."
 
 In this case, the branch and the memory write would execute at the same time.
 By the time we find out that there's a branch to take (or equivalently, that we've mispredicted the branch), 
@@ -323,14 +323,13 @@ don't forget them, which would be catastrophic.
 A theme of all of the techniques we will see in the future is that there are some
 cases where doing better is _possible_, but simply
 too expensive.
-
-We've just seen a couple, when it comes to hazards.
+We've just seen a couple involving hazards!
 
 There's a particular very common case of RAW/WAW hazards in x86. x86 has `push` and `pop`
 instructions that use a dedicated _stack pointer_
 register to help the programmer manage the call stack.
 
-It's very common for a function to start with a sequence like
+A function might start with a sequence like this:
 
 ```
   push  bp
@@ -340,17 +339,22 @@ It's very common for a function to start with a sequence like
 ```
 
 This sequence sets up the stack frame for a function.
-`bp` is used for the frame pointer. Such code is extremely common.
+`bp` is used for the frame pointer.
+Since code like this is involved in every function call,
+this is an _extremely_ common pattern.
 
 But `push` both reads _and_ writes `sp`, the stack pointer register.
-That means every single `push` instruction in this code causes a hazard.
+That means every single `push` instruction in this code causes a hazard!
 
 This case is so common that it's worth trying to do better.
 The P5 microarchitecture contains "`sp` predictors"
 that recognize `push`/`pop`/`call`/`ret` instructions
 (all of which use `sp` on x86) and compute the `sp`
 value that the V-pipe instruction should see.
-They can do this before the U-pipe instruction executes.
+They can do this in a pipeline stage _before_ the U-pipe instruction executes,
+so that there is no delay needed for `sp`!
+In particular, these calculations happen in the Decode/AG stage,
+which is responsible for all types of Address Generation.
 
 The term "predictor" here just means that they compute
 something in advance. They aren't like branch predictors,
@@ -361,13 +365,13 @@ which enables those 4 instructions to pair.[^7]
 
 ## The EFLAGS Register
 
-Those of you familiar with x86 might have noticed something worrying.
-Almost always, the instruction immediately before a branch
+Those of you familiar with x86 might have noticed something worrying -
+almost always, the instruction immediately before a branch
 computes a condition for the branch. x86 conditions
 come in several forms, and the computed conditions
-are stored in an implicit register called the `EFLAGS` register.
+are stored in an _implicit_ register called the `EFLAGS` register.
 
-So wouldn't such patterns cause a RAW Hazard on the `EFLAGS` register?
+So, wouldn't such patterns cause a RAW Hazard on the `EFLAGS` register?
 
 Most of the reason for separating register read, execute, and register write stages in the pipeline
 is that we have to do complex execution with the
@@ -376,22 +380,25 @@ to forward results quickly, which also takes time,
 so it helps if the values to forward come from the
 start of a stage instead of the end.
 
-These things don't apply to `EFLAGS`, because we never do complex things with it.
+However, access to `EFLAGS` is simple.
 Each instruction can only read it _or_ write it.
 Since it's not general-purpose like the other registers,
 it's also less complicated to keep track of.
 
 This means we can keep the `EFLAGS` register entirely in the execute stage,
-and resolve hazards on the register inside the stage.
+and resolve hazards on the register inside the stage!
 
 As a result, `EFLAGS` hazards never prevent pairing.
 The hardware to resolve those hazards inside the stage
-adds some complication, but it's not too bad.
+adds some complication, but it's not too bad,
+and it is _absolutely_ worth it.
 
 Something important to point out is that resolving those hazards can introduce delay into the system.
 If the U-pipe instruction can't produce flag values
 for a long time, and the V-pipe instruction is a branch
-that needs to read them, the branch has to wait.
+that needs to read them, the branch circuitry has to
+wait for the flag values to propagate through the stage's
+circuit.
 The fact that this is possible at all would slow down our clock
 even when the instructions in the execute stage don't care.
 
@@ -400,6 +407,9 @@ In the P5 microarchitecture, the pipeline stages are split up
 so that the execute stage instructions can produce their
 flag values very quickly. Most of the stage's delay
 comes from the fact that it also handles memory writes.
+If things would take too long, the execute stage can
+stall. This allows us to trade extra cycles in some rare cases
+for clock speed in _all_ cases. That's a good deal!
 
 # Conclusions
 
@@ -419,7 +429,7 @@ but it was the first superscalar architecture for x86.
 Due to x86's complexity, such a thing was previously
 thought to be impossible. In fact, even just being able
 to effectively _pipeline_ an x86 architecture was thought
-to be impossible.
+to be impossible!
 
 I chose to use the P5 architecture as an example here because an overview at this level doesn't care
 so much about the specific machine language.
