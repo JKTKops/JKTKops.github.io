@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+<!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>More Basic Algebraic Structures | Max Kopinsky</title>
+<meta name="generator" content="Jekyll v4.2.2" />
+<meta property="og:title" content="More Basic Algebraic Structures" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="In the last post, we saw how we can view the hierarchy of algebraic structures as a system of adding requirements to the binary operator of each structure." />
+<meta property="og:description" content="In the last post, we saw how we can view the hierarchy of algebraic structures as a system of adding requirements to the binary operator of each structure." />
+<link rel="canonical" href="https://maxkopinsky.com/math/algebra/2022/07/18/more-basics.html" />
+<meta property="og:url" content="https://maxkopinsky.com/math/algebra/2022/07/18/more-basics.html" />
+<meta property="og:site_name" content="Max Kopinsky" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-07-18T05:30:00+00:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="More Basic Algebraic Structures" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BlogPosting","dateModified":"2022-07-18T05:30:00+00:00","datePublished":"2022-07-18T05:30:00+00:00","description":"In the last post, we saw how we can view the hierarchy of algebraic structures as a system of adding requirements to the binary operator of each structure.","headline":"More Basic Algebraic Structures","mainEntityOfPage":{"@type":"WebPage","@id":"https://maxkopinsky.com/math/algebra/2022/07/18/more-basics.html"},"url":"https://maxkopinsky.com/math/algebra/2022/07/18/more-basics.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <link rel="stylesheet" href="/assets/css/style.css?v=">
+    <script src="https://code.jquery.com/jquery-1.12.4.min.js" integrity="sha256-ZosEbRLbNQzLpnKIkEdrPv7lOy9C27hHQ+Xp8a4MxAQ=" crossorigin="anonymous"></script>
+    <script src="/assets/js/respond.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <!--[if lt IE 8]>
+    <link rel="stylesheet" href="/assets/css/ie.css">
+    <![endif]-->
+    <!-- for mathjax -->
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({
+        extensions: [
+            "MathMenu.js",
+            "MathZoom.js",
+            "AssistiveMML.js",
+            "a11y/accessibility-menu.js"
+        ],
+        jax: ["input/TeX", "output/CommonHTML"],
+        loader: {load: ['[tex]/colortbl']},
+        TeX: {
+            packages: {'[+]': ['colortbl']},
+            extensions: [
+                "AMSmath.js",
+                "AMSsymbols.js",
+                "noErrors.js",
+                "noUndefined.js",
+            ]
+        }
+    });
+    </script>
+    <script type="text/javascript" async
+       src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML">
+    </script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+
+  </head>
+  <body>
+      <div id="header">
+        <nav>
+          <li class="fork"><a href="">View On GitHub</a></li>
+          
+        </nav>
+      </div><!-- end header -->
+
+    <div class="wrapper">
+
+      <section>
+        <div id="title">
+          <h1>Max Kopinsky</h1>
+          <p>Functional Programming, Formal Methods, Computer Architecture, and Math!</p>
+          <hr>
+        </div>
+
+        <h1>More Basic Algebraic Structures</h1>
+
+        <p>In <a href="/math/algebra/2022/07/17/basic-structures.html">the last post</a>, we saw how we
+can view the hierarchy of algebraic structures as a system of adding requirements
+to the binary operator of each structure.</p>
+
+<p><img src="/assets/abstract-algebra/hierarchy.svg" /></p>
+
+<p>In this post we’ll wrap up our exploration of the bottom half with unital magma
+and quasigroups. Then we’ll talk about loops and groupoids. Groupoids are where
+we really start getting enough interesting structure to make interesting statements
+about all groupoids at once.</p>
+
+<ul id="markdown-toc">
+  <li><a href="#unital-magma-one-single-lava-please" id="markdown-toc-unital-magma-one-single-lava-please">Unital Magma: One Single Lava, Please</a>    <ul>
+      <li><a href="#identity-elements-are-unique" id="markdown-toc-identity-elements-are-unique">Identity Elements Are Unique!</a></li>
+    </ul>
+  </li>
+  <li><a href="#quasigroups-latin-squares" id="markdown-toc-quasigroups-latin-squares">Quasigroups: Latin Squares</a></li>
+  <li><a href="#loops-a-quick-detour" id="markdown-toc-loops-a-quick-detour">Loops: A Quick Detour</a></li>
+  <li><a href="#groupoids-invertible-categories" id="markdown-toc-groupoids-invertible-categories">Groupoids: Invertible Categories</a>    <ul>
+      <li><a href="#proof-of-inverse-inverses" id="markdown-toc-proof-of-inverse-inverses">Proof Of Inverse-Inverses</a></li>
+      <li><a href="#proof-of-inverse-of-product" id="markdown-toc-proof-of-inverse-of-product">Proof of Inverse-of-Product</a></li>
+      <li><a href="#the-category-model" id="markdown-toc-the-category-model">The Category Model</a></li>
+      <li><a href="#a-more-interesting-example" id="markdown-toc-a-more-interesting-example">A More Interesting Example</a></li>
+    </ul>
+  </li>
+  <li><a href="#groupoid-tangent-torsors" id="markdown-toc-groupoid-tangent-torsors">Groupoid Tangent: Torsors</a></li>
+  <li><a href="#next-time-monoids" id="markdown-toc-next-time-monoids">Next Time: Monoids</a></li>
+</ul>
+
+<h1 id="unital-magma-one-single-lava-please">Unital Magma: One Single Lava, Please</h1>
+
+<p>The possible properties we’ve put on the operator so far include totality,
+association, and identities<sup id="fnref:1" role="doc-noteref"><a href="#fn:1" class="footnote" rel="footnote">1</a></sup>. We got semigroups by starting from magma and
+requiring the operation to be associative. What if instead, we require the
+operation to have identities?</p>
+
+<p>Specifically, the property we’re going to add is slightly different than what we
+had before. Before we assumed that there was an identity for <em>each</em> arrow in
+a category, and that the left and right identities could be different. However,
+this was only really necessary because categories did not require the operation to
+be total.</p>
+
+<p>The reason this is undesirable is because that if I give you an element of the set
+\(S\) and ask you for the (left or right) identity element, you can’t easily give
+it to me. You’d have to find the correct identity <em>for that element</em>, and this could
+be quite difficult. So we’re going to add a stronger requirement instead, which
+makes it easy to find the correct identity.</p>
+
+\[\text{The Identity Axiom} \\ \text{There is an } e \text{ such that for all } x, e \cdot x = x \cdot e = x\]
+
+<p>Now it’s easy to find the correct identity, because it’s always the same.</p>
+
+<p>We do have to be careful though. The axiom doesn’t say that there is <em>only one</em> \(e \in S\)
+with this property, just that there is <em>at least</em> one. We cannot (naively) assume
+that the identity is unique - we’ll come back to this in a moment.</p>
+
+<p>Recall that we defined \(\cdot(A, B)\) for our model of magma to be the operation
+that makes a new tree node whose children are \(A\) and \(B\). The carrier set
+for this model is the set of (rooted) binary trees. But I implicitly disregarded
+the existence of <em>empty</em> trees - we assumed that every tree in the set has at
+least one node. This was effectively required because every node needs to have either
+zero or two children; \(\emptyset \cdot A\) would only have one child which is not
+allowed.</p>
+
+<p>But we can still give a definition for \(\emptyset \cdot A\) - it can just be \(A\)
+again! By definition, \(\emptyset\) (the empty tree) would be our left identity.</p>
+
+<p>We can similarly define \(A \cdot \emptyset = A\), and now it’s also the right identity<sup id="fnref:2" role="doc-noteref"><a href="#fn:2" class="footnote" rel="footnote">2</a></sup>.</p>
+
+<p>This lets \(\emptyset\) satisfy our definition of the identity element.</p>
+
+<p>Now recall that we got here by adding \(\emptyset\) to our carrier set. It wasn’t there
+before, but we’ve added it in and defined \(\cdot\) for it. What’s stopping us from
+also adding a new element, 🙂, and defining it to <em>also</em> be an identity?</p>
+
+<p>Seemingly, the answer is nothing. And this takes us to our first highly-general application
+of the ideas of abstract algebra.</p>
+
+<h3 id="identity-elements-are-unique">Identity Elements Are Unique!</h3>
+
+<p>Let’s suppose that we have a unital magma with two <em>distinct</em> elements \(e_1, e_2\) which
+both satisfy the identity law. What happens if we try and compute \(e_1 \cdot e_2\)?</p>
+
+\[\begin{aligned}
+e_1 &amp;= e_1 \cdot e_2 \\
+&amp;= e_2
+\end{aligned}\]
+
+<p>We can prove that \(e_1 = e_2\)! This happens because both identities are <em>both</em> left and
+right identities.</p>
+
+<p>The amazing thing is that this proof only uses the identity law. Whenever we have a
+structure with this identity law, we get <em>for free</em> that the identities are unique!</p>
+
+<p>This applies to anything that is a unital magma - unital magmas, but also monoids, loops,
+groups, and more.</p>
+
+<p>Therefore, from now on, we will say <em>the</em> identity instead of <em>an</em> identity.</p>
+
+<h1 id="quasigroups-latin-squares">Quasigroups: Latin Squares</h1>
+
+<p>Latin Squares are a generalization of Sudoku puzzles. We have an \(n \times n\) grid,
+and \(n\) distinct symbols. We place each element in the grid such that each one appears
+exactly once in every row an column. Here’s an example one with 4 elements - we say it
+has <em>order</em> 4.</p>
+
+\[\begin{array}{|c|c|c|c|}
+\hline
+b &amp; d &amp; c &amp; a \\
+\hline
+a &amp; c &amp; d &amp; b \\
+\hline
+c &amp; b &amp; a &amp; d \\
+\hline
+d &amp; a &amp; b &amp; c \\
+\hline
+\end{array}\]
+
+<p>It’s not very hard to check that this is indeed a latin square. Take a few moments
+and check!</p>
+
+<p>What’s interesting, though, is that this looks suspiciously like a multiplication
+table. All we have to do is label the rows and columns with the operands and then
+declare that \(x \cdot y\) is the value in the row labeled \(x\) and column labeled \(y\).</p>
+
+\[\begin{array}{c||c|c|c|c|}
+  &amp; a &amp; b &amp; c &amp; d \\
+\hline\hline
+a &amp; b &amp; d &amp; c &amp; a \\
+\hline
+b &amp; a &amp; c &amp; d &amp; b \\
+\hline
+c &amp; c &amp; b &amp; a &amp; d \\
+\hline
+d &amp; d &amp; a &amp; b &amp; c \\
+\hline
+\end{array}\]
+
+<p>We could describe any magma in this form, but our running example so far has used the domain
+of binary trees, which is an infinite domain. Putting that in table form would be pretty tricky!
+However the magma described by this table is finite. The carrier set is just \(D = \{1,2,3,4\}\).</p>
+
+<p>\(D\), along with the multiplication table to define \(\cdot(-,-)\)<sup id="fnref:3" role="doc-noteref"><a href="#fn:3" class="footnote" rel="footnote">3</a></sup>, form a magma.
+Since the operation is
+defined by a multiplication table, we could instead call the operation multiplication. Let’s do
+that. While we’re at it, we might as well use the multiplication symbol \(*\).</p>
+
+<p>For example, we have \(a * b = d\). This pair of \((D, *)\) gives us a “finite magma.”</p>
+
+<p>Take a moment and check: is this magma unital? Answer<sup id="fnref:4" role="doc-noteref"><a href="#fn:4" class="footnote" rel="footnote">4</a></sup></p>
+
+<p>We should also check if this magma is <em>associative</em>, which would make it a semigroup. Randomly
+picking elements \(a, b, d\), we can check:</p>
+
+\[\begin{aligned}
+(a * b) * d &amp;= d * d \\
+            &amp;= c \\
+\\
+a * (b * d) &amp;= a * b \\
+            &amp;= d \\
+\end{aligned}\]
+
+<p>It’s not associative!</p>
+
+<p>However, the fact that the multiplication table is a latin square gives us an interesting
+property. The multiplication is <em>invertible</em>. That is, we have the following property.</p>
+
+\[\text{The Divisibility Axiom} \\ 
+\text{For any } a,b \in D, \text{ there are unique } x,y \in D \text{ such that} \\
+a * x = b \\
+y * a = b\]
+
+<p>We write that \(x = a \backslash b\) and \(y = b / a\). I read these as “x is a under b” and
+“y is b over a.” Respectively, we call these operations “left division” and “right division.”</p>
+
+<p>If a magma has the divisibility property, we could call the magma <em>divisible</em>. But more commonly,
+we call these structures <em>quasigroups</em>.</p>
+
+<p>We can check, from the definitions, that all of the following properties hold:</p>
+
+\[\begin{aligned}
+y &amp;= x * (x \backslash y) \\
+y &amp;= x \backslash (x * y) \\
+y &amp;= (y / x) * x          \\
+y &amp;= (y * x) / x          \\
+\end{aligned}\]
+
+<p>These identities say that multiplication and division on the same side, by the same element, in
+either order, have no effect. We’d expect that of operations called “multiplication” and
+“division,” and we get these identities <em>for free</em> from the definitions even though we didn’t
+require them explicitly!</p>
+
+<p>These properties will hold in any quasigroup. Checking the diagram, groups are (unsurprisingly)
+quasigroups, and groups are very prevalent. These properties will also hold in groups.</p>
+
+<p>The most common quasigroups are numbers with subtraction, for example \((\mathbb Z, -)\) or
+\((\mathbb R, -)\). Subtraction is total, and invertible on either side. We don’t typically
+think of subtraction as “multiplication,” but it fits the definition. And indeed, the above
+properties hold in these quasigroups.</p>
+
+<h1 id="loops-a-quick-detour">Loops: A Quick Detour</h1>
+
+<p>If we add the identity axiom to our requirements for a quasigroup, we get a structure called
+a <em>loop</em>. One example of a loop (which is not also associative) is described by the following table.</p>
+
+\[\begin{array}{c|c|c|c|c}
+1 &amp; 2 &amp; 3 &amp; 4 &amp; 5 \\
+\hline
+2 &amp; 4 &amp; 1 &amp; 5 &amp; 3 \\
+\hline
+3 &amp; 5 &amp; 4 &amp; 2 &amp; 1 \\
+\hline
+4 &amp; 1 &amp; 5 &amp; 3 &amp; 2 \\
+\hline
+5 &amp; 3 &amp; 2 &amp; 1 &amp; 4 \\
+\end{array}\]
+
+<p>There are some more subclassifications of loops, but I’m not going to get into them here. I just
+wanted to mention that this structure has a name, and it’s going to be one of the possible
+stepping stones to groups.</p>
+
+<h1 id="groupoids-invertible-categories">Groupoids: Invertible Categories</h1>
+
+<p>Continuing our exploration of inverses, what happens if we add inverses to a category? That is,
+for every arrow \(A \to B\) in a category, we’ll add the arrow \(B \to A\) if it doesn’t already
+exist.</p>
+
+<p>The exact properties we’ll add (which agree with our notion of division from quasigroups) are</p>
+
+<ol>
+  <li>For every element \(a \in D\), there exists an element \(a^{-1} \in D\).</li>
+  <li>\(a^{-1} \cdot a\) and \(a \cdot a^{-1}\) are defined (but not necessarily equal).</li>
+  <li>If \(a * b\) is defined, then \(a * b * b^{-1} = a\) and \(a^{-1} * a * b = b\).</li>
+</ol>
+
+<p>The third property is a version of the identity property that works despite the fact that
+groupoids don’t actually have to have identities. It says that whatever the result of
+\(a * a^{-1}\) is, it is an identity for any values with which multiplication <em>is</em> defined.
+However, not every element necessarily has multiplication defined with an identity!</p>
+
+<p>In every groupoid, we can prove the following useful theorems:</p>
+
+<ol>
+  <li>For any \(a\), \((a^{-1})^{-1} = a\)</li>
+  <li>If \(a * b\) exists, then \((a * b)^{-1} = b^{-1} * a^{-1}\).</li>
+</ol>
+
+<p>The proofs require some strong symbolic manipulation. This is pretty common in abstract
+algebra (hence the “abstract”) but the exchange is that the results are very general and
+powerful. Let’s get in the practice.</p>
+
+<h3 id="proof-of-inverse-inverses">Proof Of Inverse-Inverses</h3>
+
+\[\begin{aligned}
+a * a^{-1} &amp;= a * a^{-1} &amp; \text{Equality is reflexive} \\ 
+(a * a^{-1}) * (a^{-1})^{-1} &amp;= (a * a^{-1}) * (a^{-1})^{-1} &amp; \text{Right-multiply by } (a^{-1})^{-1} \\
+(a^{-1})^{-1} &amp;= (a * a^{-1}) * (a^{-1})^{-1} &amp; \text{New Axiom 3} \\
+(a^{-1})^{-1} &amp;= a * (a^{-1} * (a^{-1})^{-1}) &amp; \text{* is associative} \\
+(a^{-1})^{-1} &amp;= a &amp; \text{New Axiom 3} \\
+\end{aligned}\]
+
+<p>The right multiplication is justified because associativity and axiom 2 tell us that the
+relevant product is defined.</p>
+
+<h3 id="proof-of-inverse-of-product">Proof of Inverse-of-Product</h3>
+
+<p>This proof looks very similar to the last one. We start with the only relevant equality that
+we know, and then we rearrange things in the only two ways possible and the equality we want
+just falls out.</p>
+
+<p>Given that \(a * b\) exists, we know that \((a * b)^{-1}\) exists. Let’s call it \(e\).
+Similarly to the last proof, we can justify that \(a * b * b^{-1} * a^{-1}\) exists.</p>
+
+\[\begin{aligned}
+e &amp;= (a * b)^{-1} &amp; \text{Definition of } e \\
+e * (a * b) * (b^{-1} * a^{-1}) &amp;= (a * b)^{-1} * (a * b) * (b^{-1} * a^{-1}) &amp; \\
+e * (a * b) * (b^{-1} * a^{-1}) &amp;= (a * b)^{-1} * (a * (b * b^{-1})) * a^{-1} &amp; \text{Associativity} \\
+e * (a * b) * (b^{-1} * a^{-1}) &amp;= (a * b)^{-1} * a * a^{-1} &amp; \text{Axiom 3} \\
+e * (a * b) * (b^{-1} * a^{-1}) &amp;= (a * b)^{-1} &amp; \text{Axiom 3} \\
+(a * b)^{-1} * (a * b) * (b^{-1} * a^{-1}) &amp;= (a * b)^{-1} &amp; \text{Definition of } e \\
+(b^{-1} * a^{-1}) &amp;= (a * b)^{-1} &amp; \text{Axiom 3} \\
+\end{aligned}\]
+
+<p>Both of these properties are easier to prove on proper groups, but it’s interesting that we
+don’t actually need the existence of an identity to prove them.</p>
+
+<h3 id="the-category-model">The Category Model</h3>
+
+<p>Returning to our category model, a groupoid is a category with inverses. Using our function
+example, each node of the graph is a set. Each arrow \(A \to B\) is a function from \(A\) to \(B\).
+For simplicity, we’re only going to pick <em>one</em> function for each arrow.</p>
+
+<p>If we have an arrow \(f : A \to B\), we also have an arrow \(g : B \to A\). For each pair, we
+know that both products \(f * g\) and \(g * f\) are defined. This is our Axiom 2 of inverses
+above, and we can easily check that the model meets it: \((A \to B) * (B \to A) = (A \to A)\)
+and vice versa.</p>
+
+<p>We can also check the properties that we proved in the last couple sections, but I’ll leave
+that as an exercise.</p>
+
+<h3 id="a-more-interesting-example">A More Interesting Example</h3>
+
+<p>You may have heard people say that group theory can be applied to study Rubik’s Cubes. This is
+true, and part of the reason is that any two moves on a Rubik’s Cube can be composed. Each move
+is an element of the “Rubik’s Cube Group,” and products in a group always exist. Of course,
+this group is also a groupoid.</p>
+
+<p>But we could find a different puzzle where we can’t always compose any moves, for example,
+<a href="https://en.wikipedia.org/wiki/15_puzzle">fifteen puzzles</a>. Fifteen puzzles are commonly
+studied as groups, but they can be more naturally represented by the groupoid of sequences of
+moves. The product of two sequences means doing one and then the other (and since this is only
+possible if the hole is in the correct place in the intermediate configuration, the product
+does not always exist).</p>
+
+<p>We’ll still have all of the properties that we’ve shown hold for general groupoids. We have
+partial identities (do nothing, with the hole in a particular place), inverses,
+and composition associates. We could then apply
+<em>groupoid</em> theory to the fifteen puzzle to discover various properties of the
+“15 puzzle groupoid” and learn things about the nature of the puzzle.</p>
+
+<p>One common fact about 15 puzzles is that exactly half of the possible configurations are
+solvable. Any solvable configuration can be transformed to the solved configuration by
+applying some element of the 15-puzzle groupoid<sup id="fnref:5" role="doc-noteref"><a href="#fn:5" class="footnote" rel="footnote">5</a></sup> (a sequence of moves). It’s easy to
+prove, using the groupoid axioms, that any two solvable configurations can be transformed
+into each other (exercise). If we went and developed some groupoid theory, we could show
+that these facts <em>imply</em> that any two <em>unsolvable</em> configurations can also be transformed
+into each other, which is much less obvious.<sup id="fnref:6" role="doc-noteref"><a href="#fn:6" class="footnote" rel="footnote">6</a></sup></p>
+
+<p>The development of such a theory may be the topic of future posts, but
+this hopefully teases some of the power of abstract algebra. We get general results
+which we can then apply to learn specific things about specific models.</p>
+
+<h1 id="groupoid-tangent-torsors">Groupoid Tangent: Torsors</h1>
+
+<p>An extremely common structure in the real world is a <em>torsor</em>. Torsors are sets,
+equiped with an invertible binary operation (often written \(+\)), but without
+a notion of “zero.” This corresponds to the notion of a groupoid, although if
+we make it more precise we’ll see that I’m waving my hands fairly vigorously
+at the moment.<sup id="fnref:7" role="doc-noteref"><a href="#fn:7" class="footnote" rel="footnote">7</a></sup></p>
+
+<p>But these posts are about conceptually understanding structures, so, I’ll keep
+waving my hands for the moment.</p>
+
+<p>Consider musical notes. We have notes like A, A#, D, Fb, etc. There’s a notion
+of a “next note,” and of a “previous note,” <code class="language-plaintext highlighter-rouge">next(A) = A#</code>, <code class="language-plaintext highlighter-rouge">prev(A) = Ab</code>. These
+operations are inverses. If we see the notes as the nodes of a graph, then the
+<code class="language-plaintext highlighter-rouge">next</code> and <code class="language-plaintext highlighter-rouge">prev</code> functions are arrows between the nodes, and we have a groupoid.</p>
+
+<p>Using these functions, we can measure <em>distances</em> between notes. It takes 4 steps
+of the <code class="language-plaintext highlighter-rouge">next</code> function to get from A to C#. We can say that the distance between
+these notes is 4. By measuring distances, we can recover something that looks
+a lot like addition. However, we don’t have values that we can assign to notes themselves,
+other than arbitrary names, and we don’t have a notion of a “zero” note. So we
+can add a note to a <em>distance</em>, for example <code class="language-plaintext highlighter-rouge">B + (C# - A) = D#</code> (why?), but we can’t
+add notes to other notes.</p>
+
+<p>Torsors are pretty common in the real world. In physics, energy is a torsor. There’s
+no notion of “zero” energy. If we examine the same scenario in two different reference
+frames, we will almost certainly measure different amounts of energy for every object
+involved. Which measurement of “zero” is the right one? Neither! They are both
+equally meaningless. Yet both analyses will come to exactly the same conclusions, because
+they will measure the same <em>differences</em> in energy, and this is what matters.</p>
+
+<p>Sometimes we think something is a torsor and later find out that there is a true zero.
+Temperatures are a good example. Temperatures were thought to be a torsor until
+absolute zero was discovered. Absolute zero is the true zero of temperatures. No matter
+what scale we use to measure temperatures (analogous to a reference frame), we will
+always agree on the meaning of absolute zero.</p>
+
+<h1 id="next-time-monoids">Next Time: Monoids</h1>
+
+<p>This concludes the introduction to the basic algebraic structures, and motivating some
+of the things that they gives us the language to talk about. In the next post, we will
+talk about <em>monoids</em>, which are by far the most prevalent mathematical structure in programs
+that you’ve never heard of<sup id="fnref:8" role="doc-noteref"><a href="#fn:8" class="footnote" rel="footnote">8</a></sup>. We’ll also talk about groups, which are a prevalent
+<em>mathematical</em> structure.</p>
+
+<hr />
+
+<div class="footnotes" role="doc-endnotes">
+  <ol>
+    <li id="fn:1" role="doc-endnote">
+      <p>Recall from the previous post’s section on categories, we say “the identity
+  law” to mean the existence of <em>both</em> left and right identities. <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:2" role="doc-endnote">
+      <p>The identity laws for a small category require that an identity exists <em>for each</em>
+  element of the carrier set. They <em>do not</em> require that the identities be unique
+  or the same for every element. <a href="#fnref:2" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:3" role="doc-endnote">
+      <p>This notation means “the operation \(\cdot\) which takes two unspecified arguments.”
+  I noticed that plain \(\cdot\) is a bit awkward to read on the rendered page, so
+  I’ll use this from now on when referring to an operation that we don’t have a better
+  name for. <a href="#fnref:3" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:4" role="doc-endnote">
+      <p>No, it is not. There’s no left <em>or</em> right identity, let alone something which is both. <a href="#fnref:4" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:5" role="doc-endnote">
+      <p>I didn’t define what it means to apply a sequence of moves to the puzzle, but
+  intuitively we know what it means. However it’s worth noticing that this is
+  itself a binary operation. Rather than being from \(D \times D \to D\), though,
+  it is from \(F \times D \to F\), where \(F\) is the set of 15-puzzle configurations.
+  Such operations are called <em>groupoid actions</em>. These are closely related to
+  <em>group actions</em>, and many of the same results apply to both. <a href="#fnref:5" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:6" role="doc-endnote">
+      <p>Group theorists will recognize this as the statement that the groupoid action which
+  applies a sequence of moves to a configuration has two orbits, with equal cardinality. <a href="#fnref:6" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:7" role="doc-endnote">
+      <p>Torsors are usually analyzed as a <em>group</em> acting on a different set \(X\). Using the
+  group action and the group multiplication (which <em>does</em> have an identity), we can
+  obtain a subtraction operation on \(X\) which measures distances as elements of the
+  group. The 0 distance corresponds to the identity of the group.
+  Yet the set \(X\) does not have a designated zero. If we pick an arbitrary element of
+  \(X\) and declare it to be zero, we recover the group itself, and this is called
+  “trivializing” the torsor. But seeing things as a torsor is useful when we want to
+  work directly and only on the distances between things, and I find this conceptually
+  close to groupoids. Your mileage may vary with this one. <a href="#fnref:7" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:8" role="doc-endnote">
+      <p>Unless you enjoy programming in Haskell, in which case you probably recognize that
+  just about everything in programs is a monoid 🙂 <a href="#fnref:8" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+  </ol>
+</div>
+
+
+        <div class="PageNavigation">
+            
+            <hr>
+            
+            
+            
+            <div class="left">
+                <div>Previous</div>
+                <a href="/math/algebra/2022/07/17/basic-structures.html">Conceptual Overview of Basic Algebraic Structures</a>
+            </div>
+            
+            
+            
+            <div class="right">
+                <div>Next</div>
+                <a href="/math/algebra/2022/07/18/monoids-and-groups.html">What are Monoids and Groups?</a>
+            </div>
+            
+        </div>
+
+        <div id="credits">
+          <span class="credits left">Project maintained by <a href=""></a></span>
+          <span class="credits right">Hosted on GitHub Pages &mdash; Theme by <a href="https://twitter.com/michigangraham">mattgraham</a></span>
+        </div>
+ 
+      </section>
+
+    </div>
+
+    
+  </body>
+</html>

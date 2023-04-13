@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+<!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Superscaling | Max Kopinsky</title>
+<meta name="generator" content="Jekyll v4.2.2" />
+<meta property="og:title" content="Superscaling" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="Continuing with the computer architecture posts, this time we’re going to explore superscaling." />
+<meta property="og:description" content="Continuing with the computer architecture posts, this time we’re going to explore superscaling." />
+<link rel="canonical" href="https://maxkopinsky.com/computer-science/hardware/2023/04/13/superscaling.html" />
+<meta property="og:url" content="https://maxkopinsky.com/computer-science/hardware/2023/04/13/superscaling.html" />
+<meta property="og:site_name" content="Max Kopinsky" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2023-04-13T04:00:00+00:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Superscaling" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BlogPosting","dateModified":"2023-04-13T04:00:00+00:00","datePublished":"2023-04-13T04:00:00+00:00","description":"Continuing with the computer architecture posts, this time we’re going to explore superscaling.","headline":"Superscaling","mainEntityOfPage":{"@type":"WebPage","@id":"https://maxkopinsky.com/computer-science/hardware/2023/04/13/superscaling.html"},"url":"https://maxkopinsky.com/computer-science/hardware/2023/04/13/superscaling.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <link rel="stylesheet" href="/assets/css/style.css?v=">
+    <script src="https://code.jquery.com/jquery-1.12.4.min.js" integrity="sha256-ZosEbRLbNQzLpnKIkEdrPv7lOy9C27hHQ+Xp8a4MxAQ=" crossorigin="anonymous"></script>
+    <script src="/assets/js/respond.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <!--[if lt IE 8]>
+    <link rel="stylesheet" href="/assets/css/ie.css">
+    <![endif]-->
+    <!-- for mathjax -->
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({
+        extensions: [
+            "MathMenu.js",
+            "MathZoom.js",
+            "AssistiveMML.js",
+            "a11y/accessibility-menu.js"
+        ],
+        jax: ["input/TeX", "output/CommonHTML"],
+        loader: {load: ['[tex]/colortbl']},
+        TeX: {
+            packages: {'[+]': ['colortbl']},
+            extensions: [
+                "AMSmath.js",
+                "AMSsymbols.js",
+                "noErrors.js",
+                "noUndefined.js",
+            ]
+        }
+    });
+    </script>
+    <script type="text/javascript" async
+       src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML">
+    </script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+
+  </head>
+  <body>
+      <div id="header">
+        <nav>
+          <li class="fork"><a href="">View On GitHub</a></li>
+          
+        </nav>
+      </div><!-- end header -->
+
+    <div class="wrapper">
+
+      <section>
+        <div id="title">
+          <h1>Max Kopinsky</h1>
+          <p>Functional Programming, Formal Methods, Computer Architecture, and Math!</p>
+          <hr>
+        </div>
+
+        <h1>Superscaling</h1>
+
+        <p>Continuing with the computer architecture posts, this time we’re going to explore superscaling.</p>
+
+<p>Before we start, my goal here is to eventually describe <em>in detail</em> the various components of a
+modern CPU architecture and how they work (and how they work <em>together</em>).
+I find that it’s quite difficult to find resources online
+about how such things actually work, and I think I can fill that gap.
+Therefore, this exploration is mostly setting the stage - exploring what those components are, but not how they work.</p>
+
+<p>There are some other great sources that cover modern architecture
+principles at a high level. <a href="https://www.lighterra.com/papers/modernmicroprocessors/">This one</a> is pretty good, for example.
+It’s not a prerequisite though. This series is self-contained.</p>
+
+<ul id="markdown-toc">
+  <li><a href="#the-goal---go-fast" id="markdown-toc-the-goal---go-fast">The Goal - Go Fast</a></li>
+  <li><a href="#superscaling" id="markdown-toc-superscaling">Superscaling</a>    <ul>
+      <li><a href="#two-separate-pipelines" id="markdown-toc-two-separate-pipelines">Two Separate Pipelines</a></li>
+      <li><a href="#new-perspectives" id="markdown-toc-new-perspectives">New Perspectives</a></li>
+      <li><a href="#hazards-revisited" id="markdown-toc-hazards-revisited">Hazards Revisited</a>        <ul>
+          <li><a href="#raw-hazards" id="markdown-toc-raw-hazards">RAW Hazards</a></li>
+          <li><a href="#waw-hazards" id="markdown-toc-waw-hazards">WAW Hazards</a></li>
+          <li><a href="#war-hazards" id="markdown-toc-war-hazards">WAR Hazards</a></li>
+          <li><a href="#control-hazards" id="markdown-toc-control-hazards">Control Hazards</a></li>
+          <li><a href="#structural-hazards" id="markdown-toc-structural-hazards">Structural Hazards</a></li>
+        </ul>
+      </li>
+      <li><a href="#working-harder-in-common-cases" id="markdown-toc-working-harder-in-common-cases">Working Harder in Common Cases</a></li>
+      <li><a href="#the-eflags-register" id="markdown-toc-the-eflags-register">The EFLAGS Register</a></li>
+    </ul>
+  </li>
+  <li><a href="#conclusions" id="markdown-toc-conclusions">Conclusions</a></li>
+</ul>
+
+<h1 id="the-goal---go-fast">The Goal - Go Fast</h1>
+
+<p>The driving goal of most computer architecture innovations is
+to go fast<sup id="fnref:1" role="doc-noteref"><a href="#fn:1" class="footnote" rel="footnote">1</a></sup>. In the <a href="/computer-science/hardware/2022/08/09/basics-overview.html">last post</a>,
+we saw how <em>pipelining</em> lets us speed up the processor
+by separating out the steps of an instruction, and executing
+one instruction in each step on every cycle. In contrast,
+a simple computer model executes one instruction every cycle.
+With pipelining, every cycle we make a little bit of progress on several different instructions.
+These different instructions are independent<sup id="fnref:2" role="doc-noteref"><a href="#fn:2" class="footnote" rel="footnote">2</a></sup> and so we can
+make these little bits of progress (almost) completely in parallel. As a result, we need less time
+per cycle to make progress. So we still finish one
+instruction per cycle, but the cycles are a lot shorter.</p>
+
+<p>So why not just make our pipeline extremely deep? For example,
+if we put a pipeline fence after every logic gate, we could run our clock extremely fast.
+However, above, we assumed that each instruction in the pipe was independent.
+In the last post, we saw that small pipelines can sometimes
+even justify that assumption. But if we make the pipeline
+very deep, that assumption is pretty much guaranteed to break.
+So our clock will be very fast, but we won’t be able to keep the
+pipeline saturated with instructions. Then we wouldn’t
+be finishing one instruction per cycle, and we wouldn’t be going fast.</p>
+
+<p>We want to go fast.</p>
+
+<p>There’s another problem too, which is that there’s some
+overhead for each pipeline stage. The stages have to be separated
+by pipeline registers, which are their own bit of circuitry and
+add some more propagation delay to the overall design. 
+If we put too many of them, the overhead from the pipeline registers
+starts slowing us down more than splitting the stages can speed us up.</p>
+
+<p>So making the pipeline as deep as physically possible is not the answer. What are some other potential answers?</p>
+
+<ol>
+  <li>Make the circuit smaller. Smaller <em>physical</em> distance for signals to travel means they will not have to travel as long.</li>
+  <li>Try very hard to <em>find</em> parallelism in the program and exploit it.</li>
+  <li>Demand that users write better programs.</li>
+</ol>
+
+<p>Idea #1 is just a plain win - if we can make the circuit smaller, we should. One of the first microprocessors, the Intel 4004, had transistors about 10 μm across. Recently, mass-production of designs using transistors about 20 <em>nm</em> across has begun.<sup id="fnref:3" role="doc-noteref"><a href="#fn:3" class="footnote" rel="footnote">3</a></sup>
+We’re starting to run up against the physical limit of how small something can be, but until then, we can keep trying to eek out more speed by getting smaller.</p>
+
+<p>Idea #2 is what we were getting at with pipelining. As long as that independence assumption holds, we can find
+<em>instruction-level parallelism</em> in the program and execute several
+instructions in parallel.</p>
+
+<p>Idea #3 sounds stupid, but in fact, is a very good idea. We shouldn’t let the idea that we have to be
+fast in <em>every possible situation</em> prevent us from
+doing something that is fast only for programs that
+know how to take advantage.</p>
+
+<p>There’s a balance that we can achieve between #2 and #3,
+where we try to be fast in general, but what we choose to do works best for programs
+that are written to work with what we’re doing.
+And this actually works in practice, because it’s not <em>people</em>
+writing the programs! Compilers write the programs, and compilers are very good
+at emitting assembly that can work well with whatever constraints we put on “good programs.”</p>
+
+<p>But even in the best case, there will be lots of opportunities for instruction-level parallelization that are only apaprent at runtime.
+For example, across iterations of a loop.
+Even the smartest compiler can’t help with that.</p>
+
+<p>So idea #3 can get us surprisingly far, but it has to go <em>together</em> with idea #2 if we really want improvements. Trying harder to find parallelism results
+in hardware that has to work very hard, which has colloquially become known
+as the “brainiac” paradigm: going faster by making processors smarter.</p>
+
+<p>So with that long introduction out of the way, let’s look at another way to exploit the parallelism we find.</p>
+
+<h1 id="superscaling">Superscaling</h1>
+
+<p>Ah, the title of the post!</p>
+
+<p>Superscaling is a technique to execute multiple instructions at a time, in a <em>different</em> way from pipelining.</p>
+
+<p>Remember that basic pipelining lets us complete at most 1 instruction per cycle. That still puts quite a limit on our speed. We’re executing multiple instructions at once, by separating them into stages.</p>
+
+<p>What if we could straight-up have multiple instructions <em>in the same stage</em> at the same time? Enter superscaling.</p>
+
+<p>So-called “superscalar architectures” are architectures that can have multiple instructions in the same pipeline stage at the same time. As long as the instructions are independent, everything still works great! We do, however, consume a lot more <em>space</em>, after all, we need circuitry for multiple instructions now.</p>
+
+<p>As we’ll see in future posts, some of that growth is non-linear.
+Some techniques need to analyze every pair of instructions
+that passes through a stage, every cycle. This means that we need quadratic circuit size
+in the number of instructions we can handle at once (the “width” of the architecture).
+As a result, modern processors are typically between 4 to 6-wide superscalar architectures.</p>
+
+<p>Let’s look into how this works in more detail, using an example based on the Intel P5 microarchitecture.</p>
+
+<h2 id="two-separate-pipelines">Two Separate Pipelines</h2>
+
+<p>The P5 microarchitecture has two separate pipelines called the <em>U</em> pipe and the <em>V</em> pipe. Here’s a high-level block diagram of the integer datapath:<sup id="fnref:4" role="doc-noteref"><a href="#fn:4" class="footnote" rel="footnote">4</a></sup></p>
+
+<p><img src="/assets/architecture/p5-high-level.svg" /></p>
+
+<p>In a sequential view, the instruction in the U pipe is the first instruction,
+and the instruction in the V pipe is the second instruction.</p>
+
+<p>If these instructions could have complicated interactions with each other,
+we would have to build complicated hardware to resolve those interactions.
+That could be bad - it could be slow or just too power-hungry.
+To save on complexity, there are a whole host of
+restrictions on “pairing.”</p>
+
+<p>The first decoding stage has to decode enough of two  instructions at a time to figure out if <em>pairing</em> is possible.
+If it is, then the two instructions are paired and
+sent to the corresponding pipes at the same time.</p>
+
+<p>The U pipe can execute any instruction, so when pairing
+is not possible, the first instruction is sent to the U
+pipe and the other instruction has to wait.</p>
+
+<p>These restrictions come
+back to our idea #3 above. It’s on the user to write a program
+such that adjacent instructions are pairable. The processor
+will still work if they aren’t - but it will work up to twice as fast if they are.</p>
+
+<h2 id="new-perspectives">New Perspectives</h2>
+
+<p>Even with pipelining, it’s been relatively easy to view out processor as executing the
+code in exactly the order specified. As we explore more
+techniques, this will become more and more difficult.</p>
+
+<p>Already, it can be tricky. When two instructions execute at once, we have to think about new kinds of issues that simply cannot happen in a scalar<sup id="fnref:5" role="doc-noteref"><a href="#fn:5" class="footnote" rel="footnote">5</a></sup> architecture, even a pipelined one.</p>
+
+<p>I suggest keeping this in mind. Even when it seems obvious that something “should work,”
+question it. Very strange things can go wrong if we’re not careful!</p>
+
+<h2 id="hazards-revisited">Hazards Revisited</h2>
+
+<p>In the last post, we looked at how RAW hazards, or Read After Write hazards, can complicate the implementation of a pipeline and require forwarding.</p>
+
+<p>Now that we can execute more than one instruction <em>at the same time</em>, some new types of hazards are possible.</p>
+
+<p>I’ll demonstrate by using some actual x86 code here, but no worries. We can demonstrate all of these new issues with simple instructions:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">mov r1,r2</code> copies the value in <code class="language-plaintext highlighter-rouge">r2</code> to <code class="language-plaintext highlighter-rouge">r1</code></li>
+  <li><code class="language-plaintext highlighter-rouge">j &lt;label&gt;</code> unconditionally jumps to the label.</li>
+</ul>
+
+<h3 id="raw-hazards">RAW Hazards</h3>
+
+<p>First, let’s consider the same RAW hazard as with basic pipelining, using a chain of <code class="language-plaintext highlighter-rouge">mov</code> instructions:</p>
+
+<pre><code class="language-x86asm">  mov bx, ax
+  mov cx, bx
+</code></pre>
+
+<p>There’s a RAW hazard between these instructions, since the second one Reads <code class="language-plaintext highlighter-rouge">bx</code>
+After the first one Writes <code class="language-plaintext highlighter-rouge">bx</code> (caps for emphasis).</p>
+
+<p>In the simple pipeline, this wasn’t a huge deal; we could easily forward the new value of <code class="language-plaintext highlighter-rouge">bx</code> from the writeback stage to the execute stage by the time it was needed.</p>
+
+<p>Here we have a new kind of problem - the V pipe needs <code class="language-plaintext highlighter-rouge">bx</code> <em>at the same time</em> that the U pipe produces it. 
+In theory, this could force the V pipe to stall while the U pipe proceeds,
+which would cause our pairings to get desynchronized.</p>
+
+<p>We have no choice but to prevent this from happening entirely.
+If two instructions have a RAW hazard,
+they can’t be paired.</p>
+
+<p>If they aren’t paired, then we can use the same forwarding techniques as the simple pipeline.</p>
+
+<p>But wait - question everything! Can we really?</p>
+
+<h3 id="waw-hazards">WAW Hazards</h3>
+
+<p>Consider this sequence:</p>
+
+<pre><code class="language-x86asm">  mov cx, ax
+  mov cx, bx
+  mov dx, cx
+</code></pre>
+
+<p>The first two <code class="language-plaintext highlighter-rouge">mov</code> instructions have no RAW hazard, so we can pair them. But they <em>both</em> write <code class="language-plaintext highlighter-rouge">cx</code>, so what happens when it’s time to writeback?</p>
+
+<p>Our writeback stage now needs to be able to detect these conflicts and resolve them. The resolution is simple - the instruction in the V pipe, which is logically<sup id="fnref:6" role="doc-noteref"><a href="#fn:6" class="footnote" rel="footnote">6</a></sup> second, wins.</p>
+
+<p>Our forwarding datapath also needs to be able to detect such conflicts and
+determine not just if <em>any</em> value should be forwarded,
+but <em>which</em> value.</p>
+
+<p>This is one of those quadratic scaling issues I mentioned earlier,
+because any pair of instructions might have a WAW hazard.</p>
+
+<p>Theoretically, this isn’t a huge deal. However, the P5 chose to resolve this issue
+by pre-empting it - WAW Hazards also prevent pairing.</p>
+
+<h3 id="war-hazards">WAR Hazards</h3>
+
+<p>The last type of data hazard is called a WAR Hazard, or write-after-read. These are also known as “false hazards,” because they don’t matter unless we start doing some pretty wacky things.</p>
+
+<p>The things we’re doing here aren’t wacky enough.</p>
+
+<p>Yay for us, that means we don’t have to worry about these ones.
+We’ll revist WAR Hazards in the next post on the <em>scoreboard</em> technique.</p>
+
+<h3 id="control-hazards">Control Hazards</h3>
+
+<p>In simple pipelining, we saw <em>control hazards</em> when instructions are able to enter the pipeline after a branch, but before that branch completes execution.</p>
+
+<p>Such instructions could end up modifying the state of the machine if we weren’t careful.</p>
+
+<p>The solution previously was to “squash” them.
+Once a branch completed execution, we could squash
+the pipeline up to whichever stage the branch was in.
+This replaces all of the instructions that shouldn’t
+have slipped in with <code class="language-plaintext highlighter-rouge">nop</code>s.</p>
+
+<p>Now things are more complicated:</p>
+
+<ul>
+  <li>What if <em>both</em> instructions being executed are branches?</li>
+  <li>What if the U-pipe instruction is a branch, and the V-pipe instruction writes memory?</li>
+</ul>
+
+<p>Let’s look at the first case:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  j A
+  j B
+</code></pre></div></div>
+
+<p>If we allow these to pair, they will both enter the execute stage at the same time. Which one wins?</p>
+
+<p>For WAW hazards, the answer was that the V-pipe instruction wins.
+But here, we need the U-pipe instruction to win!
+Once again, these differences can complicate hardware.</p>
+
+<p>What about the second case?</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  j A
+  mov [ax],bx
+</code></pre></div></div>
+
+<p>That <code class="language-plaintext highlighter-rouge">mov</code> instruction is a bit different from the other ones we’ve seen.
+The <code class="language-plaintext highlighter-rouge">[ax]</code> syntax means “the value <strong>in memory</strong> at the address given by <code class="language-plaintext highlighter-rouge">ax</code>.”</p>
+
+<p>In this case, the branch and the memory write would execute at the same time.
+By the time we find out that there’s a branch to take (or equivalently, that we’ve mispredicted the branch), 
+it’s too late to stop the memory write.</p>
+
+<p>This is bad.</p>
+
+<p>In fact, this is so bad that the P5 architecture 
+doesn’t allow paired branches in the U-pipe <em>at all</em>.</p>
+
+<p>That prevents both of these weird issues. It prevents the first issue,
+a U-pipe branch being paired with a V-pipe branch.
+And it prevents the second issue, a U-pipe branch being paired with a memory write.</p>
+
+<p>This means that branches can only pair in the V-pipe, which is a bit different from the typical case.
+Since the U-pipe can execute any instruction 
+(including branches - they just can’t be paired)
+the typical case is that the V-pipe instruction prevents pairing.</p>
+
+<p>Doing things this way allows instructions to pair with branches without running the risk of hitting the memory write issue.
+Since branches are common in practice, making them completely
+unpairable would be catastrophic.</p>
+
+<h3 id="structural-hazards">Structural Hazards</h3>
+
+<p>This is a completely new type of hazard, which we will see a lot more of in the next post.</p>
+
+<p>Various instructions need access to various <em>hardware resources</em> in order to do their jobs.
+For example, an add instruction needs access to an adder.
+Load and store instructions need access to the cache.</p>
+
+<p>Previously, when only one instruction could be in a stage at a time,
+we never had to worry about resources availability.
+Now we do.</p>
+
+<p>Designing a cache that can service multiple accesses
+on the same cycle is extremely difficult.
+It’s worth it - modern caches can typically support 2 loads and 2 stores at the same time.
+Cutting-edge caches can support more.</p>
+
+<p>The P5 microarchitecture is older and couldn’t pay the cost
+of such a cache. As a result, if paired instructions both need
+access to the cache, it results in stalls.
+However, we still allow them to pair.
+The parts of the instructions (if any) that don’t need
+to access the cache can still execute in parallel,
+so the overall cycle count will still be lower than
+if we refuse to pair them.</p>
+
+<p>I’d show a timing diagram here, but I haven’t been
+able to find a way to format a 2-pipe diagram that
+makes any sense. If you know of a format, let me know!</p>
+
+<p>Any other kind of shared resource is also liable to cause
+structural hazards.</p>
+
+<p>Resolving a structural hazard requires deciding which
+request for the resource will happen first, a process called <em>arbitration</em>.
+We then have to allow the selected request to access the resource, while stalling the other request.
+We have to keep track of pending requests so that we
+don’t forget them, which would be catastrophic.</p>
+
+<h2 id="working-harder-in-common-cases">Working Harder in Common Cases</h2>
+
+<p>A theme of all of the techniques we will see in the future is that there are some
+cases where doing better is <em>possible</em>, but simply
+too expensive.
+We’ve just seen a couple involving hazards!</p>
+
+<p>There’s a particular very common case of RAW/WAW hazards in x86. x86 has <code class="language-plaintext highlighter-rouge">push</code> and <code class="language-plaintext highlighter-rouge">pop</code>
+instructions that use a dedicated <em>stack pointer</em>
+register to help the programmer manage the call stack.</p>
+
+<p>A function might start with a sequence like this:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  push  bp
+  mov   bp,sp
+  push  ax
+  push  bx
+</code></pre></div></div>
+
+<p>This sequence sets up the stack frame for a function.
+<code class="language-plaintext highlighter-rouge">bp</code> is used for the frame pointer.
+Since code like this is involved in every function call,
+this is an <em>extremely</em> common pattern.</p>
+
+<p>But <code class="language-plaintext highlighter-rouge">push</code> both reads <em>and</em> writes <code class="language-plaintext highlighter-rouge">sp</code>, the stack pointer register.
+That means every single <code class="language-plaintext highlighter-rouge">push</code> instruction in this code causes a hazard!</p>
+
+<p>This case is so common that it’s worth trying to do better.
+The P5 microarchitecture contains “<code class="language-plaintext highlighter-rouge">sp</code> predictors”
+that recognize <code class="language-plaintext highlighter-rouge">push</code>/<code class="language-plaintext highlighter-rouge">pop</code>/<code class="language-plaintext highlighter-rouge">call</code>/<code class="language-plaintext highlighter-rouge">ret</code> instructions
+(all of which use <code class="language-plaintext highlighter-rouge">sp</code> on x86) and compute the <code class="language-plaintext highlighter-rouge">sp</code>
+value that the V-pipe instruction should see.
+They can do this in a pipeline stage <em>before</em> the U-pipe instruction executes,
+so that there is no delay needed for <code class="language-plaintext highlighter-rouge">sp</code>!
+In particular, these calculations happen in the Decode/AG stage,
+which is responsible for all types of Address Generation.</p>
+
+<p>The term “predictor” here just means that they compute
+something in advance. They aren’t like branch predictors,
+which can be wrong. The <code class="language-plaintext highlighter-rouge">sp</code> predictors always produce the right value.</p>
+
+<p>These predictors are able to break hazards on <code class="language-plaintext highlighter-rouge">sp</code> caused by those 4 instructions,
+which enables those 4 instructions to pair.<sup id="fnref:7" role="doc-noteref"><a href="#fn:7" class="footnote" rel="footnote">7</a></sup></p>
+
+<h2 id="the-eflags-register">The EFLAGS Register</h2>
+
+<p>Those of you familiar with x86 might have noticed something worrying -
+almost always, the instruction immediately before a branch
+computes a condition for the branch. x86 conditions
+come in several forms, and the computed conditions
+are stored in an <em>implicit</em> register called the <code class="language-plaintext highlighter-rouge">EFLAGS</code> register.</p>
+
+<p>So, wouldn’t such patterns cause a RAW Hazard on the <code class="language-plaintext highlighter-rouge">EFLAGS</code> register?</p>
+
+<p>Most of the reason for separating register read, execute, and register write stages in the pipeline
+is that we have to do complex execution with the
+values we read, which takes time; and we need to be able
+to forward results quickly, which also takes time,
+so it helps if the values to forward come from the
+start of a stage instead of the end.</p>
+
+<p>However, access to <code class="language-plaintext highlighter-rouge">EFLAGS</code> is simple.
+Each instruction can only read it <em>or</em> write it.
+Since it’s not general-purpose like the other registers,
+it’s also less complicated to keep track of.</p>
+
+<p>This means we can keep the <code class="language-plaintext highlighter-rouge">EFLAGS</code> register entirely in the execute stage,
+and resolve hazards on the register inside the stage!</p>
+
+<p>As a result, <code class="language-plaintext highlighter-rouge">EFLAGS</code> hazards never prevent pairing.
+The hardware to resolve those hazards inside the stage
+adds some complication, but it’s not too bad,
+and it is <em>absolutely</em> worth it.</p>
+
+<p>Something important to point out is that resolving those hazards can introduce delay into the system.
+If the U-pipe instruction can’t produce flag values
+for a long time, and the V-pipe instruction is a branch
+that needs to read them, the branch circuitry has to
+wait for the flag values to propagate through the stage’s
+circuit.
+The fact that this is possible at all would slow down our clock
+even when the instructions in the execute stage don’t care.</p>
+
+<p>We have to design our pipeline carefully so that this extra delay is not a limiting factor.
+In the P5 microarchitecture, the pipeline stages are split up
+so that the execute stage instructions can produce their
+flag values very quickly. Most of the stage’s delay
+comes from the fact that it also handles memory writes.
+If things would take too long, the execute stage can
+stall. This allows us to trade extra cycles in some rare cases
+for clock speed in <em>all</em> cases. That’s a good deal!</p>
+
+<h1 id="conclusions">Conclusions</h1>
+
+<p>Multi-pipe superscaling is the first technique we’ve seen that lets us
+execute multiple instructions per cycle. For the first
+time, we’ve been talking about <em>instructions per cycle</em> instead of <em>cycles per instruction</em>.</p>
+
+<p>We’re still limited by slow instructions. Multiplication typically takes several cycles, for example, which will stall <em>both</em> pipes until its done.</p>
+
+<p>We saw a new type of hazard that was not a problem before.
+We also saw how it can be worth it to try extra hard in a common case,
+even when it’s too expensive to resolve a complication in general.
+This phenomenon will continue through every other technique we see.</p>
+
+<p>The P5 microarchitecture was far from the first superscalar architecture,
+but it was the first superscalar architecture for x86.
+Due to x86’s complexity, such a thing was previously
+thought to be impossible. In fact, even just being able
+to effectively <em>pipeline</em> an x86 architecture was thought
+to be impossible!</p>
+
+<p>I chose to use the P5 architecture as an example here because an overview at this level doesn’t care
+so much about the specific machine language.
+But the P5 microarchitecture tells a compelling story
+in the history of computer architecture.</p>
+
+<p>No matter how complicated the domain gets, no matter
+what issues and hazards arise, nothing will stop us
+in our pursuit of Going Fast.</p>
+
+<p>Up until this point, we’ve been constrained by the simple notion
+that we read instructions in some order and they should execute in that order.</p>
+
+<p>In the next post, we’re going to start to see how even something as powerful as ordering constraints
+is unable to stop us from Going Fast.</p>
+
+<p>See you then!</p>
+
+<hr />
+
+<div class="footnotes" role="doc-endnotes">
+  <ol>
+    <li id="fn:1" role="doc-endnote">
+      <p>The rest are inspired by trying to reduce power consumption. Going fast has historically been the driving factor; reducing power consumption of a technique for going fast comes <em>after</em> inventing the technique in the first place. <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:2" role="doc-endnote">
+      <p>When they aren’t independent, we start running into <em>data hazards</em>, described in the <a href="/computer-science/hardware/2022/08/09/basics-overview.html">last post</a>. <a href="#fnref:2" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:3" role="doc-endnote">
+      <p>You may have seen reference to the “3 nm process.” This is a misnomer - it’s just a marketing term. The transistors produced by the 3 nm process are <em>not</em> 3 nm across. That said, they are still really small. <a href="#fnref:3" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:4" role="doc-endnote">
+      <p>I do mean high-level - these are the components of the pipeline, but not arranged how they are actually laid out on the chip. Also, the P5 microarchitecture has an on-chip floating point unit which is not shown here. Due to how x87 floating point works, that unit has its own registers and pipeline. There’s also a lot of additional complexity for virtual addressing and cache management, which we aren’t worried about here. <a href="#fnref:4" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:5" role="doc-endnote">
+      <p>“Scalar” in this context means “one instruction per cycle.” <a href="#fnref:5" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:6" role="doc-endnote">
+      <p>“Logically” means that it came second in the input program. This is in constrast to <em>architecturally</em>, where it is simultaneous with the first <code class="language-plaintext highlighter-rouge">mov</code> instead of after it. <a href="#fnref:6" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:7" role="doc-endnote">
+      <p>Actually (because of course there’s an “actually”), x86’s <code class="language-plaintext highlighter-rouge">ret</code> instruction can optionally take an integer operand. When it does, instead of only popping a return address off the stack, it will pop the given amount of extra space <em>before</em> popping the return address. This is not common and would make <code class="language-plaintext highlighter-rouge">sp</code> prediction harder. The P5 doesn’t do it. Such <code class="language-plaintext highlighter-rouge">ret</code> instructions remain unpairable if they are involved in hazards on <code class="language-plaintext highlighter-rouge">sp</code>. <a href="#fnref:7" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+  </ol>
+</div>
+
+
+        <div class="PageNavigation">
+            
+            <hr>
+            
+            
+            
+            <div class="left">
+                <div>Previous</div>
+                <a href="/computer-science/hardware/2022/08/09/basics-overview.html">Crash Course on Principles of Computer Architecture</a>
+            </div>
+            
+            
+        </div>
+
+        <div id="credits">
+          <span class="credits left">Project maintained by <a href=""></a></span>
+          <span class="credits right">Hosted on GitHub Pages &mdash; Theme by <a href="https://twitter.com/michigangraham">mattgraham</a></span>
+        </div>
+ 
+      </section>
+
+    </div>
+
+    
+  </body>
+</html>

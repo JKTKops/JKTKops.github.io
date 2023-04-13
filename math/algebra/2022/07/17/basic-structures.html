@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+<!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Conceptual Overview of Basic Algebraic Structures | Max Kopinsky</title>
+<meta name="generator" content="Jekyll v4.2.2" />
+<meta property="og:title" content="Conceptual Overview of Basic Algebraic Structures" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="If you haven’t seen the previous post in this series, and want an introduction to abstract algebra before getting into specific structures, you should check out What is Abstract Algebra, Anyway?." />
+<meta property="og:description" content="If you haven’t seen the previous post in this series, and want an introduction to abstract algebra before getting into specific structures, you should check out What is Abstract Algebra, Anyway?." />
+<link rel="canonical" href="https://maxkopinsky.com/math/algebra/2022/07/17/basic-structures.html" />
+<meta property="og:url" content="https://maxkopinsky.com/math/algebra/2022/07/17/basic-structures.html" />
+<meta property="og:site_name" content="Max Kopinsky" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-07-17T04:00:00+00:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Conceptual Overview of Basic Algebraic Structures" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BlogPosting","dateModified":"2022-07-17T04:00:00+00:00","datePublished":"2022-07-17T04:00:00+00:00","description":"If you haven’t seen the previous post in this series, and want an introduction to abstract algebra before getting into specific structures, you should check out What is Abstract Algebra, Anyway?.","headline":"Conceptual Overview of Basic Algebraic Structures","mainEntityOfPage":{"@type":"WebPage","@id":"https://maxkopinsky.com/math/algebra/2022/07/17/basic-structures.html"},"url":"https://maxkopinsky.com/math/algebra/2022/07/17/basic-structures.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <link rel="stylesheet" href="/assets/css/style.css?v=">
+    <script src="https://code.jquery.com/jquery-1.12.4.min.js" integrity="sha256-ZosEbRLbNQzLpnKIkEdrPv7lOy9C27hHQ+Xp8a4MxAQ=" crossorigin="anonymous"></script>
+    <script src="/assets/js/respond.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <!--[if lt IE 8]>
+    <link rel="stylesheet" href="/assets/css/ie.css">
+    <![endif]-->
+    <!-- for mathjax -->
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({
+        extensions: [
+            "MathMenu.js",
+            "MathZoom.js",
+            "AssistiveMML.js",
+            "a11y/accessibility-menu.js"
+        ],
+        jax: ["input/TeX", "output/CommonHTML"],
+        loader: {load: ['[tex]/colortbl']},
+        TeX: {
+            packages: {'[+]': ['colortbl']},
+            extensions: [
+                "AMSmath.js",
+                "AMSsymbols.js",
+                "noErrors.js",
+                "noUndefined.js",
+            ]
+        }
+    });
+    </script>
+    <script type="text/javascript" async
+       src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML">
+    </script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+
+  </head>
+  <body>
+      <div id="header">
+        <nav>
+          <li class="fork"><a href="">View On GitHub</a></li>
+          
+        </nav>
+      </div><!-- end header -->
+
+    <div class="wrapper">
+
+      <section>
+        <div id="title">
+          <h1>Max Kopinsky</h1>
+          <p>Functional Programming, Formal Methods, Computer Architecture, and Math!</p>
+          <hr>
+        </div>
+
+        <h1>Conceptual Overview of Basic Algebraic Structures</h1>
+
+        <p>If you haven’t seen the previous post in this series, and want
+an introduction to abstract algebra before getting into specific structures,
+you should check out <a href="/math/algebra/2022/07/16/what-is-abstract-algebra.html">What is Abstract Algebra, Anyway?</a>.</p>
+
+<p>As a reminder, we’ll be starting to explore the various single-domain, single binary operator
+algebraic structures in the following hierarchy.</p>
+
+<p><img src="/assets/abstract-algebra/hierarchy.svg" /></p>
+
+<p>We’ll start at the bottom and work our way up, talking about each arrow individually.
+Let’s build some intuition!</p>
+
+<ul id="markdown-toc">
+  <li><a href="#sets-setting-the-stage" id="markdown-toc-sets-setting-the-stage">Sets: Setting the Stage</a></li>
+  <li><a href="#magmas-both-lava-and-trees" id="markdown-toc-magmas-both-lava-and-trees">Magmas: Both Lava and Trees</a></li>
+  <li><a href="#semigroupoids-honestly-these-never-come-up" id="markdown-toc-semigroupoids-honestly-these-never-come-up">Semigroupoids: Honestly, These Never Come Up</a></li>
+  <li><a href="#small-categories-it-begins" id="markdown-toc-small-categories-it-begins">Small Categories: It Begins</a></li>
+  <li><a href="#semigroups-from-semigroupoids-the-graph-collapses" id="markdown-toc-semigroups-from-semigroupoids-the-graph-collapses">Semigroups (from Semigroupoids): The Graph Collapses</a></li>
+  <li><a href="#semigroups-from-magmas-just-change-equality" id="markdown-toc-semigroups-from-magmas-just-change-equality">Semigroups (from Magmas): Just Change Equality</a></li>
+  <li><a href="#more-to-come" id="markdown-toc-more-to-come">More To Come</a></li>
+</ul>
+
+<h2 id="sets-setting-the-stage">Sets: Setting the Stage</h2>
+
+<p>Experienced mathematicians should feel comfortable skipping this section. I will introduce some
+basic concepts and notation, then move on.</p>
+
+<p>As mentioned in the last post, before we can have structure, we need to have things to put structure on.
+This is the <em>domain</em> of the structure, and it will almost always be a set of some kind.</p>
+
+<p>Sets aren’t themselves very interesting. They are collections of things. They can be any things.
+Even other sets! We write sets as a list of things inside curly braces, for example \(\{1, 2, 3\}\).
+Even though we write them as a list, keep in mind that sets have no structure at all. \(\{3, 2, 1\}\)
+is the same set, because the order doesn’t matter (order would be structure). All that matters is that
+the elements are the same.</p>
+
+<p>However within a set, the elements do not have to look like each other. For example, we can easily
+write \(\{1, cat, \text{:)}\}\). I’m not sure how this set is useful, but it is a set.</p>
+
+<p>There are several well-known sets with special names. For example, the natural numbers are written
+\(\mathbb N\). Here’s a quick list of some common sets of numbers.</p>
+
+<ul>
+  <li>\(\mathbb N\) - the natural numbers</li>
+  <li>\(\mathbb Z\) - the integers</li>
+  <li>\(\mathbb Q\) - the rational numbers</li>
+  <li>\(\mathbb R\) - the real numbers</li>
+  <li>\(\mathbb C\) - the complex numbers</li>
+</ul>
+
+<p>If we want to say that some thing \(x\) belongs to a set \(S\), we write \(x \in S\). When we have
+a set containing things that are alike, we can call the set a “type” and say that its elements
+“are that type.” For example, there is a type of natural numbers, and 0 is a natural number.
+When viewing a set this way, we would instead write \(x : S\).</p>
+
+<p>There’s also a set usually written <strong>1</strong>, which is the set containing a single element. It doesn’t
+really matter what that element is, because you can easily view any set with only one element
+through the lens of any other set with only one element.</p>
+
+<p>Wait. What does that mean?</p>
+
+<p>In the last post we discussed how we can view natural numbers and stacks of pennies as being
+“the same thing.” We did that by describing how we could view both of them as modeling the same
+set of properties. Here, what we’re trying to say is that if you have a set with one element, say
+\(\{1\}\), then anything you say about that set will immediately apply to another set, say \(\{\text{dog}\}\),
+which also only has one element. We make it apply by replacing any reference to \(1\) with a reference
+to “dog.”</p>
+
+<p>What that describes is a way to <em>translate</em> from \(\{1\}\) to \(\{\text{dog}\}\). This is a function!
+If we call the function \(\tt{translate}\), then we can define it as \(\tt{translate}(1) = \text{dog}\).
+We would say that the <em>type</em> of this function is from \(\{1\}\) to \(\{\text{dog}\}\). The notation
+for this is simply \(\tt{translate} : \{1\} \to \{\text{dog}\}\).</p>
+
+<p>We can also go the other way, using \(\tt{translate'} : \{\text{dog}\} \to \{1\}\), in the obvious
+way. Since we can go in both directions without losing or gaining any information, then conceptually,
+both sets must contain exactly the same information to begin with!</p>
+
+<p>This concept of “containing the same information” is at the core of what we can do with abstract
+algebra. We can prove properties about some model by showing that it contains the same information
+as some other model where those properties are easier to prove - and proving the properties on that
+model instead.<sup id="fnref:1" role="doc-noteref"><a href="#fn:1" class="footnote" rel="footnote">1</a></sup></p>
+
+<p>That’s a bit of an abstract concept, so let’s work an example.</p>
+
+<p>Let’s suppose we have a computer program which reads a simple expression, like “1 + 1,” as a string,
+and evaluates it. We’ll let the expressions contain a pair of natural numbers and either “+” or “*”.</p>
+
+<p>It’s pretty hard to do any meaningful work on a string. Turning “1 + 1” into “2” is not so simple!</p>
+
+<p>However most programming languages provide functions like <code class="language-plaintext highlighter-rouge">parseInt : String -&gt; int</code> and
+<code class="language-plaintext highlighter-rouge">toString : int -&gt; String</code>. If we restrict ourselves to strings that actually contain integers,
+then this pair of functions “witnesses” that those strings and the set of integers contain the
+same information, just like <code class="language-plaintext highlighter-rouge">translate</code> and <code class="language-plaintext highlighter-rouge">translate'</code> <em>witnessed</em> that \(\{1\}\) and
+\(\{\text{dog}\}\) do.</p>
+
+<p>So lets use these functions to translate our strings into a domain we can work on more easily:</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">Op</span><span class="p">(</span><span class="n">Enum</span><span class="p">):</span>
+    <span class="n">Add</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">Times</span> <span class="o">=</span> <span class="mi">2</span>
+
+<span class="k">def</span> <span class="nf">parseExp</span><span class="p">(</span><span class="nb">input</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Op</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+    <span class="n">left</span><span class="p">,</span> <span class="n">opstr</span><span class="p">,</span> <span class="n">right</span> <span class="o">=</span> <span class="nb">input</span><span class="p">.</span><span class="n">split</span><span class="p">()</span>
+    <span class="n">op</span> <span class="o">=</span> <span class="n">Add</span> <span class="k">if</span> <span class="n">opstr</span> <span class="o">==</span> <span class="s">"+"</span> <span class="k">else</span> <span class="n">Times</span> <span class="c1"># for simplicity
+</span>    <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">left</span><span class="p">),</span> <span class="n">op</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">right</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">toString</span><span class="p">(</span><span class="n">result</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Op</span><span class="p">,</span> <span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">return</span> <span class="p">[</span> <span class="nb">str</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+           <span class="p">,</span> <span class="s">"+"</span> <span class="k">if</span> <span class="n">result</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="n">Add</span> <span class="k">else</span> <span class="s">"*"</span>
+           <span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+           <span class="p">].</span><span class="n">join</span><span class="p">(</span><span class="s">' '</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>These two functions witness that (well-formed!) expressions contain the same information
+whether we represent them as strings or as our little custom datatype.</p>
+
+<p>These types of bidirectional transformations are <em>extremely</em> common in programming. Hopefully
+that motivates the power of abstract algebra to help us think about and improve our programs.</p>
+
+<p>So let’s finish this out. Now to show our property (that we can evaluate expressions-as-strings),
+we have to show that our new custom datatype has the same property (that we can evaluate them).
+Now it’s easy;</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">eval</span><span class="p">(</span><span class="n">exp</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Op</span><span class="p">,</span> <span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="n">match</span> <span class="n">exp</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
+        <span class="n">case</span> <span class="n">Add</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">exp</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">exp</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+        <span class="n">case</span> <span class="n">Times</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">exp</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">exp</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+</code></pre></div></div>
+
+<p>And of course we can recover the result as a string with <code class="language-plaintext highlighter-rouge">str</code>, if we want to.</p>
+
+<p>This kind of bidirectional transformation is called a <em>bijection</em>. In order to know that we have
+the same information both ways, we need to know that the transformations in each direction preserve
+the structure we are working with. Bijections don’t have to preserve structure, but sets don’t have
+any structure to preserve anyway. A bijection that <em>does</em> preserve structure is called an
+<em>isomorphism</em>, from the Greek <em>iso-</em>, meaning “same” and <em>morphous</em> meaning “form.”</p>
+
+<p>For sets, all bijections are isomorphisms. In abstract algebra, we care much more about isomorphisms
+than general bijections.</p>
+
+<h2 id="magmas-both-lava-and-trees">Magmas: Both Lava and Trees</h2>
+
+<p>The section title is mostly a joke about the more common usage of the term “magma,” don’t try
+and read too much into it.</p>
+
+<p>There’s only one arrow in the diagram to talk about here - we get magmas from sets.</p>
+
+<p>In order to get a magma from a set, we need to add an operation that operates on two elements
+of the set, and produces a third. This operation is typically written \(\cdot\).</p>
+
+<p>If our carrier set is \(S\), we can write the type of \(\cdot\) as \(\cdot : S \times S
+\to S\). For those unfamiliar, \(S \times S\) means the type of two things in \(S\), or a pair
+of things in \(S\). For example, \((1, 2) \in \mathbb N \times \mathbb N\). If \(x,y \in S\), we
+write \(\cdot(x, y)\) or equivalently (and preferably) \(x \cdot y\).</p>
+
+<p>The only property that a magma imposes on the operation is its type. It must work for <em>any</em> two
+elements of \(S\), and the result must also be an element of \(S\). The operation does <em>not</em> have
+to be associative, commutative, or anything else.</p>
+
+<p>Most of the structures we will look at later will subsume magmas, meaning that anything which models
+them is <em>also</em> a model of a magma. For the sake of example, though, let’s consider something which
+is a magma and <em>only</em> a magma: binary trees.</p>
+
+<p>A binary tree is a data structure where at any point, we either refer to two smaller binary trees,
+or to nothing. The operation \(\cdot\) combines its arguments as subtrees under a new node.
+Some examples of this magma:</p>
+
+<center><img src="/assets/abstract-algebra/basic-structures/magma-examples.svg" /></center>
+
+<p>Get out a piece of paper and consider what \(A \cdot B\) looks like. What about \(B \cdot A\)?</p>
+
+<p>They aren’t the same! That means that \(\cdot\) does not <em>commute</em>.</p>
+
+<p>What about \((A \cdot B) \cdot C\)? Compare that to \(A \cdot (B \cdot C)\). They also aren’t the same!
+This means that \(\cdot\) does not <em>associate</em>.</p>
+
+<p>The only property that we are guaranteed by a magma is <em>closure</em>: if \(a\) and \(b\) are in the magma,
+then \(a \cdot b\) exists and is also in the magma.</p>
+
+<h2 id="semigroupoids-honestly-these-never-come-up">Semigroupoids: Honestly, These Never Come Up</h2>
+
+<p>Despite the section header, these are worth talking about if only as a stepping stone.</p>
+
+<p>Once again, we’re going to imbue our carrier set \(S\) with a binary operation \(\cdot : S \times S \to S\).
+However, this time, we’re going to put a different requirement on it. Instead of requiring it to be <em>total</em>,
+we require it to <em>associate</em>. What that means is that there might be some elements of \(S\) for which \(\cdot\)
+is undefined.</p>
+
+<p>However, if \(a \cdot b\) exists, and \((a \cdot b) \cdot c\) exists, then both \(b \cdot c\) and
+\(a \cdot (b \cdot c)\) must <em>also</em> exist. Furthermore, \((a \cdot b) \cdot c = a \cdot (b \cdot c)\).</p>
+
+<p>We can see a semigroupoid as a directed graph by looking at the graph in a different way than we did for magma.</p>
+
+<p>This time, consider the nodes of the graph. There are arrows between them; let the set of all those arrows
+form our carrier set. Remember, sets can be of strange things! An arrow from node \(A\) to node \(B\) gives us
+a “path” to get from \(A\) to \(B\). There are <em>a lot</em> of notations used for this by different authors, and
+honestly I find most of them obscure<sup id="fnref:2" role="doc-noteref"><a href="#fn:2" class="footnote" rel="footnote">2</a></sup>. So let’s use a simple one: The arrow from \(A\) to \(B\) will
+literally be written \(A \to B\) :).</p>
+
+<p>Now we can define \(x \cdot y\) for two arrows \(x\) and \(y\). First of all, remember that \(\cdot\) does
+not have to be defined for every pair of arrows. So since arrows describe paths between nodes, let’s let
+\(\cdot\) be the operator which <em>combines</em> paths. That seems pretty natural, right?</p>
+
+<p>We define \((A \to B) \cdot (B \to C) = A \to C\). In order for a particular graph to to model a
+semigroupoid in this way, the arrow \(A \to C\) <em>must</em> exist. That’s not a property of semigroupoids though.
+It’s just a property of the way we have defined this model. Here’s a pair of examples of such semigroupoids.</p>
+
+<center>
+  <img src="/assets/abstract-algebra/basic-structures/semigroupoids.svg" />
+</center>
+
+<p>A very important facet of abstract algebra is apparent here: there are <em>many</em> things that fit the mold of
+“semigroupoids,” and two of them are shown here, but these two semigroupoids are <em>not</em> the same. Proving
+something about the first would not necessarily prove the same thing about the second, because they don’t
+contain the same information! In math-speak, these semigroupoids are not <em>isomorphic</em>.</p>
+
+<p>We could easily take some arbitrary set \(\{\) 🙂, 🙁, 😃 \(\}\) and define, again arbitrarily,
+that 😃 \(\cdot\) 🙁 = 🙂. The result is certainly a semigroupoid (there aren’t enough
+equations to even trigger the associativity requirement). But this semigroupoid is <em>isomorphic</em> to the first
+one above (why?). Since they carry the same information, we only have to talk about one of them. Graphs
+are easier to visualize, so we’re going to use them!</p>
+
+<p>In the second semigroupoid above, notice that \(2 \to 2\) and \(4 \to 4\) exist, because of the pair
+of arrows \(2 \to 4\) and \(4 \to 2\). We can take \((2 \to 4) \cdot (4 \to 2)\) to “round-trip” back to
+\(2\), and according to our definition, that means \(2 \to 2\) has to exist.</p>
+
+<p>We can also use the second semigroupoid to check that the way we defined the operation is actually associative. You can check that</p>
+
+\[\begin{aligned} ((1 \to 2) \cdot (2 \to 4)) \cdot (4 \to 3) &amp;= (1 \to 4) \cdot (4 \to 3)\\
+&amp;= 1 \to 3\\
+\\
+(1 \to 2) \cdot ((2 \to 4) \cdot (4 \to 3)) &amp;= (1 \to 2) \cdot (2 \to 3)\\
+&amp;= 1 \to 3\\
+\end{aligned}\]
+
+<p>Indeed, those are the same.</p>
+
+<p>However, it’s also quite apparent that \(\cdot\) does not commute. In fact, it fails to commute in the most
+spectacular fashion imaginable: not only does \((B \to C) \cdot (A \to B)\) fail to equal \((A \to B) \cdot (B \to C)\),
+it doesn’t even exist! We didn’t define the operation for arrows that don’t share an intermediate node, and the
+semigroupoid laws don’t say we have to.</p>
+
+<p>Since arrows describe paths between nodes, it’s pretty common to only draw the minimal number of arrows and leave
+the combined paths as implied. In the complex graph, we could omit arrows \(2 \to 2, 4 \to 4, 1 \to 3, 2 \to 3,\) and \(1 \to 4\).</p>
+
+<h2 id="small-categories-it-begins">Small Categories: It Begins</h2>
+
+<p>Small categories are where things really start getting interesting. For simplicity, I’m just going to call these
+categories. This is conceptually fine, but you can see the footnote to see what “small” means here if you want.<sup id="fnref:3" role="doc-noteref"><a href="#fn:3" class="footnote" rel="footnote">3</a></sup></p>
+
+<p>With semigroupoids, we saw that it was ocassionally necessary to have an arrow \(a \to a\), in order to make
+sure that the product of two arrows exists. When we have these arrows, we get the nice pair of equations</p>
+
+\[\begin{aligned}
+  (a \to a) \cdot (a \to b) &amp;= a \to b \\
+  (a \to b) \cdot (b \to b) &amp;= a \to b \\
+\end{aligned}\]
+
+<p>These are respectively called the left identity equation and the right identity equation. For the arrow
+\(a \to b\), the arrow \(a \to a\) is called a left identity and the arrow \(b \to b\) is called a right
+identity.</p>
+
+<p>A <em>category</em> is what we get if we <em>require</em> that these identity arrows exist. We add a pair of requirements
+to our operation:</p>
+
+<ol>
+  <li>For any element \(x\), there exists an element \(e_l\) such that \(e_l \cdot x = x\)</li>
+  <li>For any element \(x\), there exists an element \(e_r\) such that \(x \cdot e_r = x\)</li>
+</ol>
+
+<p>In our graph model<sup id="fnref:4" role="doc-noteref"><a href="#fn:4" class="footnote" rel="footnote">4</a></sup>, recall that we only required arrows to exist if they were necessary to “combine
+paths.” These two new requirements additionally require arrows to exist from every node to itself.
+Collectively, these requirements are called the “left and right identity laws.” We’re never going to want
+one without the other, so we’ll shorten that to just “the identity law,” and use that phrase to mean the
+pair of them together.</p>
+
+<p>Categories have the nice property that for any node in the graph, there is <em>definitely</em> an arrow pointing
+away from it, and an arrow pointing towards it. That means that when proving things about categories, we
+can freely say “pick an arrow pointing to \(b\)” or “pick an arrow from \(a\),” without running into the
+problems that this could cause with a semigroupoid.</p>
+
+<p>Other than our graph model, a pretty typical example of a category is that of functions from some type
+to itself. If we consider the collection of all functions \(f : S \to S\), we get a category. The operation
+is function composition. The (singular) identity is simply \(f(x) = x\), which is both a left and right
+identity to every other function in the category. Such functions are often referred to as <em>endomorphisms</em>,
+from the Greek root <em>endo-</em> meaning “within.” This structure is incidentally more than just a category.</p>
+
+<h2 id="semigroups-from-semigroupoids-the-graph-collapses">Semigroups (from Semigroupoids): The Graph Collapses</h2>
+
+<p>Every arrow in our original hierarchy<sup id="fnref:5" role="doc-noteref"><a href="#fn:5" class="footnote" rel="footnote">5</a></sup> represents adding a single new restriction to the operation \(\cdot\).
+This time, we’re taking a semigroupoid (which requires that the operation <em>associate</em>) and additionally require
+that the operation be <em>total</em>.</p>
+
+<p>In our graph view, this means we have to somehow define \((a \to b) \cdot (c \to d)\), and it’s not obvious how
+to do that. In fact, it seems there isn’t any reasonable way to do it at all!</p>
+
+<p>There’s one exception. If we allow our graph to have multiple arrows between the same nodes, then a graph
+with only one node and many arrows from that node to itself forms a semigroup. Since every arrow looks like
+\((a \to a)\), we can always define \(\cdot\). But now it’s not so obvious how this is useful.</p>
+
+<p>We could imagine that the singular node represents some set, and that each arrow represents
+some arbitrary function from that set to itself. This is <em>extremely</em> general, but it is a semigroup.
+Really, it’s a whole family of semigroups, because it will form a semigroup no matter which functions
+we choose from the set to itself. Notably, unlike the similar category example, we <em>don’t</em> have to have
+the identity function in our collection!</p>
+
+<p>Since semigroups are semigroupoids (and magmas), anything that we can prove about semigroupoids (or magmas)
+will also apply to semigroups, and therefore applies to this amazingly general structure of “composing
+functions from a set to itself.”</p>
+
+<h2 id="semigroups-from-magmas-just-change-equality">Semigroups (from Magmas): Just Change Equality</h2>
+
+<p>We can get an alternate view of semigroups by coming from Magmas. Magmas required the operation to
+be total. Semigroups additionally require the operation to associate.</p>
+
+<p>Looking back at <a href="/math/algebra/2022/07/17/basic-structures.html#magmas-both-lava-and-trees">the section on magmas</a>, we
+called two trees equivalent if they looked the same. This was the reason the operation didn’t associate.
+But what if we redefine equality, specifically so that \(a \cdot (b \cdot c) = (a \cdot b) \cdot c\)?
+No one says we <em>can’t</em> do this. What structure do we end up with?</p>
+
+<p>Since we can now shift the parentheses around arbitrarily, we can always move them as far to the left
+as we want. The result will be binary trees that look like this:</p>
+
+<center>
+  <img src="/assets/abstract-algebra/basic-structures/semigroup-chain.svg" />
+</center>
+
+<p>So we now say two trees are equivalent if we can rearrange their nodes (but without swapping the <em>order</em> -
+semigroups still aren’t commutative!) to move all the “interesting” nodes to the left, and they look the
+same after we’re done. If we wanted to worry about order, we could label the nodes at the bottom with numbers,
+but let’s keep it simple here and leave them as dots.</p>
+
+<p>We can see an easier criteria for equality based on that. Two of these semigroups are “the same” if they have
+the same number of nodes. That’s it!</p>
+
+<p>And since we can always adjust such a tree to whatever (tree) structure we like, the “structure” that the
+semigroup knows is just the order of the leaves at the bottom. That carries exactly the same information
+as an ordered list of the leaves!<sup id="fnref:6" role="doc-noteref"><a href="#fn:6" class="footnote" rel="footnote">6</a></sup> Notice though, that this model doesn’t support empty lists (yet).</p>
+
+<p>So by coming at semigroups from different angles, we are able to see two <em>completely</em> different views of
+the object. And yet amazingly, both views describe exactly the same thing. This is the power of abstract
+algebra at work. We can prove things about semigroups, mentally reasoning about them as nonempty lists, and
+as long as in practice we only use the semigroup laws, we will get the same results about semigroups as
+graphs for free! <em>Including</em> the semigroup of function compositions that we saw in the last section,
+which is seemingly entirely unrelated to the semigroups we are looking at now. In fact, they are one
+and the same!</p>
+
+<p>This relationship can be daunting. How can we conceptualize that they have the same structure?</p>
+
+<p>I think it is best to simply not try and find deeper meaning here. We’ve seen that what matters is
+the <em>properties</em> that they have in common. In both cases, we have a set, and a binary operation which is total and
+associative. This is all the relationship that they need.</p>
+
+<p>Rather than be confused how they can be the same, I think it suffices to see this core property that they
+share and simply sigh in awe.</p>
+
+<h2 id="more-to-come">More To Come</h2>
+
+<p>I’m going to leave this post off here to avoid it getting <em>too</em> long. In the next post we will take a brief
+look at unital magma and quasigroups. Then we’ll get to the interesting stuff that comes up in programming
+and in life all the time - monoids and groups.</p>
+
+<hr />
+
+<div class="footnotes" role="doc-endnotes">
+  <ol>
+    <li id="fn:1" role="doc-endnote">
+      <p>It is really important that we show the models contain the same information. We could have
+  two different models of a structure which <em>do not</em> contain the same information, and that difference
+  in information might make the properties true in one model but false in the other! <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:2" role="doc-endnote">
+      <p>The worst offender for newcomers is \(Hom(A, B)\) for \(A \to B\). This comes from category theory
+  and I won’t be using it here. But if you do see it in the wild, mentally rewrite it to \(A \to B\). <a href="#fnref:2" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:3" role="doc-endnote">
+      <p>Essentially, there’s a problem with the way we hand-wavily defined a set as a collection of anything.
+  We could define a set as “the collection of all objects with some property,” for example all numbers
+  that are natural, or all integers divisible by 3. But even worse, we can define sets of sets in some
+  ways that are straight-up impossible. The quintessential example is called Russel’s Paradox. The set
+  of “all sets that do not contain themselves” cannot exist. If it doesn’t contain itself, it should.
+  But if it contains itself, then it shouldn’t! This was a major problem in the formalization of math,
+  and modern set theory systems define sets in a way that prevents this. But category theorsists <em>really</em>
+  want to be able to talk about categories of categories in the most generic way possible. To solve this
+  problem, we distinguish between “small” categories, whose arrows (and objects) form sets in the modern
+  set-theory way, and “large” categories, whose arrows (and objects) are just defined by some property.
+  The latter collections are called “proper classes,” and generally a “class” is a collection of things
+  which <em>are not</em> classes. All this to say, the word “small” here solves a problem that we didn’t even
+  have to think about, so I’m just going to drop it in this post. <a href="#fnref:3" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:4" role="doc-endnote">
+      <p>The graph model is actually the standard model of categories. Categories are usually defined as having
+  <em>two</em> carrier sets, the graph nodes and the graph arrows, considered separately. But for our purposes
+  it’s really enough to consider just the arrows and assume that they point between distinguishable things.
+  Either way, if you had a different model of a category, it would be possible to transform it to the
+  graph model and only <em>lose</em> information, not gain anything. Category theorists say the graph model is
+  “universal,” but in our language, we’ll say graphs are “the free categories on graph nodes.” It
+  will be a while before we get into free structures, but it is one of my eventual goals in this post
+  category. <a href="#fnref:4" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:5" role="doc-endnote">
+      <p>Does that sound suspiciously like a category? Because it is! <a href="#fnref:5" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:6" role="doc-endnote">
+      <p>From a programming perspective, this relationship is what lets us turn programs (strings of words)
+  into richer <em>parse trees</em>. The programming language dictates what additional non-associative tree
+  structure to imbue the text with, but the original program needn’t care. It’s just a list! <a href="#fnref:6" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+  </ol>
+</div>
+
+
+        <div class="PageNavigation">
+            
+            <hr>
+            
+            
+            
+            <div class="left">
+                <div>Previous</div>
+                <a href="/math/algebra/2022/07/16/what-is-abstract-algebra.html">What is Abstract Algebra, Anyway?</a>
+            </div>
+            
+            
+            
+            <div class="right">
+                <div>Next</div>
+                <a href="/math/algebra/2022/07/18/more-basics.html">More Basic Algebraic Structures</a>
+            </div>
+            
+        </div>
+
+        <div id="credits">
+          <span class="credits left">Project maintained by <a href=""></a></span>
+          <span class="credits right">Hosted on GitHub Pages &mdash; Theme by <a href="https://twitter.com/michigangraham">mattgraham</a></span>
+        </div>
+ 
+      </section>
+
+    </div>
+
+    
+  </body>
+</html>

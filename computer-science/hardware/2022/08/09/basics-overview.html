@@ -1,0 +1,683 @@
+<!doctype html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+<!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>Crash Course on Principles of Computer Architecture | Max Kopinsky</title>
+<meta name="generator" content="Jekyll v4.2.2" />
+<meta property="og:title" content="Crash Course on Principles of Computer Architecture" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="In this category of posts, we’re going to talk about computer architecture." />
+<meta property="og:description" content="In this category of posts, we’re going to talk about computer architecture." />
+<link rel="canonical" href="https://maxkopinsky.com/computer-science/hardware/2022/08/09/basics-overview.html" />
+<meta property="og:url" content="https://maxkopinsky.com/computer-science/hardware/2022/08/09/basics-overview.html" />
+<meta property="og:site_name" content="Max Kopinsky" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-08-09T02:00:00+00:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="Crash Course on Principles of Computer Architecture" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BlogPosting","dateModified":"2022-08-09T02:00:00+00:00","datePublished":"2022-08-09T02:00:00+00:00","description":"In this category of posts, we’re going to talk about computer architecture.","headline":"Crash Course on Principles of Computer Architecture","mainEntityOfPage":{"@type":"WebPage","@id":"https://maxkopinsky.com/computer-science/hardware/2022/08/09/basics-overview.html"},"url":"https://maxkopinsky.com/computer-science/hardware/2022/08/09/basics-overview.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <link rel="stylesheet" href="/assets/css/style.css?v=">
+    <script src="https://code.jquery.com/jquery-1.12.4.min.js" integrity="sha256-ZosEbRLbNQzLpnKIkEdrPv7lOy9C27hHQ+Xp8a4MxAQ=" crossorigin="anonymous"></script>
+    <script src="/assets/js/respond.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <!--[if lt IE 8]>
+    <link rel="stylesheet" href="/assets/css/ie.css">
+    <![endif]-->
+    <!-- for mathjax -->
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({
+        extensions: [
+            "MathMenu.js",
+            "MathZoom.js",
+            "AssistiveMML.js",
+            "a11y/accessibility-menu.js"
+        ],
+        jax: ["input/TeX", "output/CommonHTML"],
+        loader: {load: ['[tex]/colortbl']},
+        TeX: {
+            packages: {'[+]': ['colortbl']},
+            extensions: [
+                "AMSmath.js",
+                "AMSsymbols.js",
+                "noErrors.js",
+                "noUndefined.js",
+            ]
+        }
+    });
+    </script>
+    <script type="text/javascript" async
+       src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML">
+    </script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+
+  </head>
+  <body>
+      <div id="header">
+        <nav>
+          <li class="fork"><a href="">View On GitHub</a></li>
+          
+        </nav>
+      </div><!-- end header -->
+
+    <div class="wrapper">
+
+      <section>
+        <div id="title">
+          <h1>Max Kopinsky</h1>
+          <p>Functional Programming, Formal Methods, Computer Architecture, and Math!</p>
+          <hr>
+        </div>
+
+        <h1>Crash Course on Principles of Computer Architecture</h1>
+
+        <p>In this category of posts, we’re going to talk about computer architecture.</p>
+
+<p>For completeness, before getting into any of the crazy (and crazy <em>cool</em>!) modern technologies,
+I want to give a crash-course overview of the basics of computer architecture. How do computers
+work at the logical level?</p>
+
+<p>Most posts in this series are going to be deep dives into a particular technology, how it works,
+and how it might be implemented. However, I don’t feel justified in getting into that without
+having an accompanying crash course on the pre-requisites.</p>
+
+<p>This post is going to zoom through what should be a one-semester undergraduate university course.
+It won’t be comprehensive, but should get the ideas across.</p>
+
+<ul id="markdown-toc">
+  <li><a href="#what-is-a-computer" id="markdown-toc-what-is-a-computer">What is a Computer?</a></li>
+  <li><a href="#capabilities" id="markdown-toc-capabilities">Capabilities</a></li>
+  <li><a href="#a-simple-model" id="markdown-toc-a-simple-model">A Simple Model</a>    <ul>
+      <li><a href="#performance" id="markdown-toc-performance">Performance</a></li>
+    </ul>
+  </li>
+  <li><a href="#pipelining" id="markdown-toc-pipelining">Pipelining</a>    <ul>
+      <li><a href="#data-hazards" id="markdown-toc-data-hazards">Data Hazards</a></li>
+      <li><a href="#resolving-raw-hazards" id="markdown-toc-resolving-raw-hazards">Resolving RAW Hazards</a></li>
+      <li><a href="#method-1-pipeline-stall" id="markdown-toc-method-1-pipeline-stall">Method 1: Pipeline Stall</a></li>
+      <li><a href="#method-2-data-forwarding" id="markdown-toc-method-2-data-forwarding">Method 2: Data Forwarding</a></li>
+    </ul>
+  </li>
+  <li><a href="#pipelining-with-control-flow" id="markdown-toc-pipelining-with-control-flow">Pipelining With Control Flow</a>    <ul>
+      <li><a href="#control-hazards" id="markdown-toc-control-hazards">Control Hazards</a></li>
+    </ul>
+  </li>
+  <li><a href="#memory-is-slow" id="markdown-toc-memory-is-slow">Memory is Slow</a></li>
+  <li><a href="#conclusions" id="markdown-toc-conclusions">Conclusions</a></li>
+</ul>
+
+<h1 id="what-is-a-computer">What is a Computer?</h1>
+
+<p>It’s easy to see computers as magical black boxes. One common joke is that “Computers are just
+rocks we tricked into thinking.” And that’s actually sort of true. But computers don’t <em>think</em>
+the way we do. Really, computers are nothing more than glorified calculators. The images you
+see on your screen are the results of (sometimes complex) calculations to produce location
+and color data for each pixel. Everything comes down to moving around data and performing
+arithmetic on that data.</p>
+
+<p>A typical definition of a computer is “a machine that can be programmed to carry out sequences
+of arithmetic or logical operations automatically.” We might ask what can be computed in this
+way; namely: if I give you a function definition, and some inputs to that function, what types
+of computers are capable of evaluating the function on those inputs? The study of different
+types of computers is called <em>models of computation</em>. The highest class of model of computation
+contains “computers that can compute anything which <em>can</em> be computed.”<sup id="fnref:1" role="doc-noteref"><a href="#fn:1" class="footnote" rel="footnote">1</a></sup> Those are what we’re
+concerned with here.</p>
+
+<h1 id="capabilities">Capabilities</h1>
+
+<p>A computer has to be programmable by the definition above. Computers will get their programs as
+a sequence of steps to perform. Each step tells the computer to use a single one of its capabilities.
+Computers have some short-term storage called <em>registers</em>. They can operate directly only on values
+that are in registers.</p>
+
+<p>The most basic capabilities of a modern computer all fall into one of the following categories:</p>
+
+<ol>
+  <li>Retrieve data from memory into a register (“memory load”)</li>
+  <li>Place data into memory from a register (“memory store”)</li>
+  <li>Perform arithmetic (or logic) on two numbers in registers</li>
+  <li>Redirect to a different location in the sequence of steps, for example “Go to step 4.”</li>
+  <li><em>Conditionally</em> redirect, for example “Go to step 4, but only if x is 0.”</li>
+</ol>
+
+<p>After performing one step, we move on to the next step in the sequence.</p>
+
+<p>Any particular computer has a particular set of instructions that it can understand, called
+an “instruction set,” or ISA<sup id="fnref:2" role="doc-noteref"><a href="#fn:2" class="footnote" rel="footnote">2</a></sup>. Of course,
+it doesn’t understand them written in English. They have to be encoded in binary in a consistent
+way which depends on the particular computer. We’re not going to concern ourselves with that
+encoding here. We’ll assume the existence of a circuit called a “decoder,” which translates the
+binary-encoded instruction into a bunch of “control signals” which control what the rest of the
+computer does.</p>
+
+<p>We’re also not going to worry about modelling a computer that can compute <em>quickly</em>. Computing
+at all will do for now, and we’ll worry about being fast later.</p>
+
+<p>Common instructions available in most instruction sets are:</p>
+
+<ol>
+  <li>LDI (or “Load Immediate”): place a specified value into a specified register<sup id="fnref:3" role="doc-noteref"><a href="#fn:3" class="footnote" rel="footnote">3</a></sup></li>
+  <li>ADD: add the values in two specified registers, storing the result into a third specified register</li>
+  <li>Other arithmetic or logic operations, for example AND, OR, and SUB</li>
+  <li>JMP: redirect to a given instruction in the program<sup id="fnref:4" role="doc-noteref"><a href="#fn:4" class="footnote" rel="footnote">4</a></sup></li>
+  <li>BRANCH: conditionally redirect, using a specified condition to test a specified value.</li>
+</ol>
+
+<p>So what do we need to implement all of this?</p>
+
+<ol>
+  <li>Somewhere to store the program</li>
+  <li>Some collection of registers (typically called a “Register File”)</li>
+  <li>Some type of data memory</li>
+  <li>Circuitry that can perform arithmetic and logic (typically called an Arithmetic/Logic Unit,
+ or ALU)</li>
+  <li>A counter to keep track of where we are in the program</li>
+  <li>A way to overwrite the counter</li>
+  <li>Circuitry that can test conditions</li>
+</ol>
+
+<h1 id="a-simple-model">A Simple Model</h1>
+
+<p>Here’s a very basic way we could combine the above pieces into something resembling a computer.</p>
+
+<center>
+<img src="/assets/architecture/basic-computer.svg" />
+</center>
+
+<p>The decoder controls what everything else does. It tells memory to load or store (or do nothing),
+it tells the register file which registers to read and write, the ALU what operation to perform,
+the test unit what logical test to use, and the program counter whether or not it should overwrite
+and with what value (possibly depending on the result of the test, which comes from the test unit).</p>
+
+<p>This is actually a perfectly good basic model of a computer. Modern computers don’t look like this,
+but they have components that are individually recognizable as components of this model.</p>
+
+<h2 id="performance">Performance</h2>
+
+<p>A computer based on this model is going to be bad. Why?</p>
+
+<p>Each “cycle” of the computer is controlled by a clock. When the clock ticks, we move on to the next
+step according to the program counter. We need to give each step enough time for all of the
+control and data signals to propogate through the whole system. For some of these signals, that
+might be slow<sup id="fnref:5" role="doc-noteref"><a href="#fn:5" class="footnote" rel="footnote">5</a></sup>. Say the slowest signal chain starts from the program counter, goes through the
+program, decoder, register file, ALU, and back to the register file (perhaps for an operation
+like division, which is fairly slow to perform). This slowest chain is called the <em>critical path</em>.
+If it takes half a second for a signal to get all the way through the critical path, then we cannot
+run our clock any faster than 0.5s/cycle (alternatively, 2 cycles per second or 2 Hz).</p>
+
+<p>Even though some, or even most, instructions won’t use the critical path, any instruction <em>might</em>
+be the instruction that does. So the critical path is the limiting factor to our clock speed.
+The clock speed is a significant factor when considering the speed of a computer. A faster clock
+will almost always mean a faster computer<sup id="fnref:6" role="doc-noteref"><a href="#fn:6" class="footnote" rel="footnote">6</a></sup>.</p>
+
+<p>So the first way we can think of to improve the clock speed is to make the critical path shorter.</p>
+
+<h1 id="pipelining">Pipelining</h1>
+
+<p>The major improvement to the basic design, used in all modern systems, is called <em>pipelining</em>.
+We don’t want to limit our system to only working on a single instruction at a time, and being
+stuck until that instruction is done. We also want to make the critical path shorter. We can
+hit both birds with one stone: split up the execution of an instruction into several “stages,”
+where each stage takes one clock cycle.</p>
+
+<p>Since an instruction can only occupy one stage at a time, if we have 3 stages then we can
+also be “executing” 3 instructions at once. We also run the clock faster<sup id="fnref:7" role="doc-noteref"><a href="#fn:7" class="footnote" rel="footnote">7</a></sup>, but this is
+negated by the fact that it also takes more cycles for an individual instruction to finish.</p>
+
+<p>These are the relevant numbers concerning a pipeline:</p>
+
+<ol>
+  <li>Clock speed: how many clock cycles we get per second</li>
+  <li>Latency: how many clock cycles it takes to execute one instruction from start to finish</li>
+  <li>Throughput: how many instructions complete each clock cycle</li>
+</ol>
+
+<p>For our basic model here, the throughput should stay at 1, even though the latency has increased.
+Since we’re running the clock faster, that means we’re finishing more instructions <em>per second</em>,
+so our computer is going faster. In an ideal world, the latency triples, the clock speed gets cut
+into 1/3, and the throughput remains 1. That works out to our computer running about three times
+faster, without any changes to the program!</p>
+
+<p>To implement pipelining, we use “pipeline registers,” also called “fences,” to separate each
+stage. We can modify the basic design to something like this, for a 3-stage example.</p>
+
+<p><img src="/assets/architecture/basic-pipeline.svg" /></p>
+
+<p>This gives us a <em>mostly</em> clean division between each stage of the pipeline - fetch, execute,
+and writeback. But hang on - stage 3 doesn’t appear to exist at all!</p>
+
+<p>Stage 3 is the “writeback” stage, where the results are written to where they have to go, which
+is either the register file or program counter (memory writes are handled in the second stage,
+which is called “execute”). What logic there is to handle in this stage would be built into
+the register file and program counter, so there’s no new units here. But that does mean
+there isn’t a clear separation between stages. As you might expect, that causes major problems.</p>
+
+<p>Consider the instruction sequence that adds register A to register B, storing to register C,
+and then adds register C to register D, storing back to register A. We can visualize what’s
+going on with a <em>timing table</em> as follows:</p>
+
+\[\begin{array}{|c|c|c|c|}
+\hline
+\text{stage} &amp; \text{cycle 1} &amp; \text{cycle 2} &amp; \text{cycle 3} &amp; \text{cycle 4} \\
+\hline
+\text{Fetch} &amp; \mathtt{ADD\ A\ B\ C} &amp; \tt{ADD\ C\ D\ A} &amp; - &amp; - \\
+\hline
+\text{Execute} &amp; - &amp; \tt{ADD\ A\ B\ C} &amp; \tt{ADD\ C\ D\ A} &amp; - \\
+\hline
+\text{Write} &amp; - &amp; - &amp; \tt{ADD\ A\ B\ C} &amp; \tt{ADD\ C\ D\ A} \\
+\hline
+\end{array}\]
+
+<p>This table shows us the instruction in each stage at any given cycle. We could also write
+these as instructions vs time, instead of stage vs time, but I find this way a bit easier.</p>
+
+<p>There’s a big problem with this program. The result of the first instruction won’t be available
+in the register file until <em>after</em> the cycle that the instruction writes back. But looking at
+cycle 3 in the table, the second instruction needs to read register C as input on the same cycle!</p>
+
+<p>So what gives, and how can we fix it?</p>
+
+<h2 id="data-hazards">Data Hazards</h2>
+
+<p>The above problem is known as a <em>data hazard</em>, specifically of the read-after-write kind. This
+is often abbreviated RAW. Hazards describe types of <em>data dependencies</em>, where the order of
+instructions in the program implicitly connect instructions which write and read the same data
+from a register. A RAW hazard means that we must not read the register until after the write
+has completed.</p>
+
+<p>There are other types of hazards as well. If we have a write-after-read hazard, then we must
+ensure that the instruction which reads is able to read the data <em>before</em> it is overwritten
+by the write. There are also write-after-write hazards, which require us to enforce that
+results are written in the correct order so that the correct data is in registers after
+the instruction sequence.</p>
+
+<p>Since our model executes instructions in order<sup id="fnref:8" role="doc-noteref"><a href="#fn:8" class="footnote" rel="footnote">8</a></sup>, WAR and WAW hazards simply cannot happen.</p>
+
+<h2 id="resolving-raw-hazards">Resolving RAW Hazards</h2>
+
+<p>There are two ways we could try to resolve the RAW hazard in the above program.</p>
+
+<p>The first, and most obvious solution, is to force <code class="language-plaintext highlighter-rouge">ADD C D A</code> to wait until <code class="language-plaintext highlighter-rouge">ADD A B C</code> completes
+writeback before allowing it to execute. This is tricky to implement, however, because up to
+this point we have always assumed that instructions move through the pipeline at exactly one
+stage per cycle - no more, no less. However it’s certainly possible and this approach is known as
+a “pipeline stall.”</p>
+
+<p>The better solution is to provide a <em>shortcut</em> for <code class="language-plaintext highlighter-rouge">ADD C D A</code>’s writeback so that it is accessible
+to an executing instruction in the same cycle. This technique is called <em>data forwarding</em>.</p>
+
+<p>Either way, we have to detect that two instructions have a hazard; this is generally easy as we
+can just remember which register(s) are used by every instruction and compare the registers being
+read in the execute stage to the registers being written in the write-back stage.</p>
+
+<h2 id="method-1-pipeline-stall">Method 1: Pipeline Stall</h2>
+
+<p>Using the first approach, we need to modify our first pipeline fence so that it gets an extra
+control signal. This signal describes if it should output the stored instruction at all. If it
+shouldn’t, it should instead output a <code class="language-plaintext highlighter-rouge">NOP</code> instruction, which is short for “no operation.”</p>
+
+<p><code class="language-plaintext highlighter-rouge">NOP</code>s which enter the pipeline due to stalls are commonly called <em>pipeline bubbles</em>, since they
+behave identically to air bubbles in a water pipe.</p>
+
+<p>Additionally, if we stall, we need to prevent the program counter from advancing, or else we will
+lose the stalled instruction.</p>
+
+<p>Adding a hazard control unit to our model, we can come up with a computer design like the following.</p>
+
+<p><img src="/assets/architecture/stall-pipeline.svg" /></p>
+
+<p>With this approach, the same program experiences the following timing table:</p>
+
+\[\begin{array}{|c|c|c|c|}
+\hline
+\text{stage} &amp; \text{cycle 1} &amp; \text{cycle 2} &amp; \text{cycle 3} &amp; \text{cycle 4} &amp; \text{cycle 5}\\
+\hline
+\text{Fetch} &amp; \mathtt{ADD\ A\ B\ C} &amp; \tt{ADD\ C\ D\ A} &amp; \tt{ADD\ C\ D\ A} &amp; - &amp; - \\
+\hline
+\text{Execute} &amp; - &amp; \tt{ADD\ A\ B\ C} &amp; \tt{NOP} &amp; \tt{ADD\ C\ D\ A} &amp; - \\
+\hline
+\text{Write} &amp; - &amp; - &amp; \tt{ADD\ A\ B\ C} &amp; \tt{NOP} &amp; \tt{ADD\ C\ D\ A} \\
+\hline
+\end{array}\]
+
+<p>I think once these tables get complicated, they are easier to read if we put the pipeline on
+the horizontal axis, to match the pipeline diagrams. Let’s do that from now on; here’s the
+same table transposed.</p>
+
+\[\begin{array}{|c|c|c|c|}
+\hline
+\text{cycle} &amp; \text{Fetch} &amp; \text{Execute} &amp; \text{Write} \\
+\hline
+1 &amp; \tt{ADD\ A\ B\ C} &amp; - &amp; - \\
+\hline
+2 &amp; \tt{ADD\ C\ D\ A} &amp; \tt{ADD\ A\ B\ C} &amp; - \\
+\hline
+3 &amp; \tt{ADD\ C\ D\ A} &amp; \tt{NOP} &amp; \tt{ADD\ A\ B\ C} \\
+\hline
+4 &amp; - &amp; \tt{ADD\ C\ D\ A} &amp; \tt{NOP} \\
+\hline
+5 &amp; - &amp; - &amp; \tt{ADD\ C\ D\ A} \\
+\hline
+\end{array}\]
+
+<p>We can see that the <code class="language-plaintext highlighter-rouge">NOP</code> bubble causes the whole program to take an extra cycle, as expected.</p>
+
+<h2 id="method-2-data-forwarding">Method 2: Data Forwarding</h2>
+
+<p>Instead, let’s use a <em>forwarding unit</em> behind the register file to detect these hazards, and
+forward data from the writeback stage. We get a design that looks as follows.</p>
+
+<p><img src="/assets/architecture/forward-pipeline.svg" /></p>
+
+<p>Now we get a timing table which is the same as the original one, except this time it works!</p>
+
+<p>There is a potential complication with this design though. Often, the critical path of the
+system with this type of design is <em>already</em> in the execute stage (although this is by no means
+a guarantee). The Forwarding Unit, while cheap, does introduce some extra signal delay and
+can make the critical path longer, slowing down the clock.</p>
+
+<p>Additionally, this plan only works if the writeback stage is immediately after the stage
+performing the read. If retrieving instructions from the program is fast, we may opt to place the
+fetch-execute fence so that the register file read happens in the fetch stage instead. This
+would mean there is a two cycle gap between register reads and register writes, so two adjacent
+instructions with a RAW dependency cannot use this forwarding scheme directly. Multi-stage
+separation like this is pretty much always the case in real designs. Ideally, we combine both
+approaches. We stall exactly long enough for the data to be available for forwarding.</p>
+
+<h1 id="pipelining-with-control-flow">Pipelining With Control Flow</h1>
+
+<p>That simple example program didn’t make any use of the control flow capabilities of the computer -
+(conditionally) jumping. Let’s look at what happens if we execute a simple program like this.</p>
+
+<pre><code class="language-mips">ADD A, B, C
+JMP 2       # jump forward two instructions
+ADD B, C, D # this should be skipped
+SUB C, B, A
+</code></pre>
+
+<p>Remember that the control signals for jump instructions go through the Test unit, which is
+in the execute stage. Perhaps you can already see where this is going! Here’s the timing table.</p>
+
+\[\begin{array}{|c|c|c|c|}
+\hline
+\text{cycle} &amp; \text{Fetch} &amp; \text{Execute} &amp; \text{Write} \\
+\hline
+1 &amp; \tt{ADD\ A,\ B,\ C} &amp; - &amp; - \\
+\hline
+2 &amp; \tt{JMP\ 2} &amp; \tt{ADD\ A,\ B,\ C} &amp; - \\
+\hline
+3 &amp; \tt{ADD\ B,\ C,\ D} &amp; \tt{JMP\ 2} &amp; \tt{ADD\ A,\ B,\ C} \\
+\hline
+4 &amp; \tt{SUB\ C,\ B,\ A} &amp; \tt{ADD\ B,\ C,\ D} &amp; \tt{JMP\ 2} \\
+\hline
+5 &amp; \tt{SUB\ C,\ B,\ A} &amp; \tt{SUB\ C,\ B,\ A} &amp; \tt{ADD\ B,\ C,\ D} \\
+\hline
+6 &amp; - &amp; \tt{SUB\ C,\ B,\ A} &amp; \tt{SUB\ C,\ B,\ A} \\
+\hline
+7 &amp; - &amp; - &amp; \tt{SUB\ C,\ B,\ A} \\
+\hline
+\end{array}\]
+
+<p>Oh no! The <code class="language-plaintext highlighter-rouge">ADD B, C, D</code> instruction and even an extra copy of the <code class="language-plaintext highlighter-rouge">SUB</code> instruction,
+snuck into the pipeline before we realized we were supposed to skip forward!</p>
+
+<p>What gives, and how do we fix it?</p>
+
+<h2 id="control-hazards">Control Hazards</h2>
+
+<p>The fact that there is time between fetching a jump (or branch) instruction, and actually
+redirecting the program counter, means that there will always be a chance for instructions that
+should have been skipped to sneak into the pipeline. This is called a <em>control hazard</em>.</p>
+
+<p>Since we’re not omniscient, and neither is our computer, there’s not really anything we can
+do to make the program go faster in every case, unlike with the RAW hazards. In future posts,
+we’ll see some methods that can work in <em>most</em> cases.</p>
+
+<p>The simplest approach is after decoding a jump (or branch) instruction, we simply stall until
+it completes execution and then continue after being redirected. This, obviously, introduces
+large pipeline bubbles and is generally not ideal.</p>
+
+<p>An easy potential improvement to that is to have separate data paths (signal paths through
+the circuit) for jump and branch instructions, since jumps can be detected and executed
+much more easily. In our simple computer architecture, we can most likely detect jump instructions
+directly in the decoder and execute them in the Fetch stage without causing critical path issues.</p>
+
+<p>A harder improvement is to consider that, sometimes, the instruction that would sneak into the
+pipeline actually <em>should</em> be the next instruction. We don’t know it yet, but we could hope to
+get lucky. When the branch actually executes, if the branch is in fact taken, we have to track
+down those “hopeful” instructions and remove them from the pipeline. For our simple pipelines,
+this is easy - it’s every instruction in the pipeline in an earlier stage than the branch.
+We remove those instructions by replacing them with <code class="language-plaintext highlighter-rouge">NOP</code>s, which is called <em>squashing the pipeline</em>.</p>
+
+<p>We can implement that in our pipeline registers by adding some control ability. When we need to
+stall, the fence currently (1) does not read new input from the previous stage, and (2) does
+not send its stored instruction to the next stage (sending a <code class="language-plaintext highlighter-rouge">NOP</code> instead). In order to squash,
+the fence should replace the stored instruction with a <code class="language-plaintext highlighter-rouge">NOP</code> instead of reading new input from
+the previous stage. Next cycle, after the program counter redirect, the Fetch stage will contain
+the correct next instruction, prepared to send it into the first fence. The squashed instructions
+have all become <code class="language-plaintext highlighter-rouge">NOP</code>s.</p>
+
+<p>An architecture block diagram and timing table for the above program with this scheme could look
+like this.</p>
+
+<p><img src="/assets/architecture/speculative-pipeline.svg" /></p>
+
+\[\begin{array}{|c|c|c|c|}
+\hline
+\text{cycle} &amp; \text{Fetch} &amp; \text{Execute} &amp; \text{Write} \\
+\hline
+1 &amp; \tt{ADD\ A,\ B,\ C} &amp; - &amp; - \\
+\hline
+2 &amp; \tt{JMP\ 2} &amp; \tt{ADD\ A,\ B,\ C} &amp; - \\
+\hline
+3 &amp; \tt{SUB\ C,\ B,\ A} &amp; \tt{NOP} &amp; \tt{ADD\ A,\ B,\ C} \\
+\hline
+4 &amp; - &amp; \tt{SUB\ C,\ B,\ A} &amp; \tt{NOP} \\
+\hline
+5 &amp; - &amp; - &amp; \tt{SUB\ C,\ B,\ A} \\
+\hline
+\end{array}\]
+
+<p>We executed the unconditional jump immediately in the fetch stage (and have the decoder
+pass on a <code class="language-plaintext highlighter-rouge">NOP</code> instead of the now-useless <code class="language-plaintext highlighter-rouge">JMP</code>). As a result, the erroneous instruction
+never enters the pipeline at all, and we even finish two cycles faster. Nice!</p>
+
+<p>What if that unconditional jump was a conditional branch? Let’s not worry about types of
+conditional branches here; let’s just assume that the same <code class="language-plaintext highlighter-rouge">JMP 2</code> instruction now needs
+to use the Test unit. We get a timing table like this one.</p>
+
+\[\begin{array}{|c|c|c|c|}
+\hline
+\text{cycle} &amp; \text{Fetch} &amp; \text{Execute} &amp; \text{Write} \\
+\hline
+1 &amp; \tt{ADD\ A,\ B,\ C} &amp; - &amp; - \\
+\hline
+2 &amp; \tt{JMP\ 2} &amp; \tt{ADD\ A,\ B,\ C} &amp; - \\
+\hline
+3 &amp; \tt{ADD\ B,\ C,\ D} &amp; \tt{JMP\ 2} &amp; \tt{ADD\ A,\ B,\ C} \\
+\hline
+4 &amp; \tt{SUB\ C,\ B,\ A} &amp; \tt{ADD\ B,\ C,\ D} &amp; \tt{JMP\ 2} \\
+\hline
+5 &amp; \tt{SUB\ C,\ B,\ A} &amp; \tt{NOP} &amp; \tt{NOP} \\
+\hline
+6 &amp; - &amp; \tt{SUB\ C,\ B,\ A} &amp; \tt{NOP} \\
+\hline
+7 &amp; - &amp; - &amp; \tt{SUB\ C,\ B,\ A} \\
+\hline
+\end{array}\]
+
+<p>As before, we still let the erroneous <code class="language-plaintext highlighter-rouge">ADD</code> and <code class="language-plaintext highlighter-rouge">SUB</code> instructions into the pipeline,
+but now we squash them when the <code class="language-plaintext highlighter-rouge">JMP</code> instruction goes to write back. Since they never
+reach the writeback stage themselves, the values they computed are never stored in the
+register file. It’s like the instructions never existed at all.</p>
+
+<p>A more advanced technique called <em>branch prediction</em> attempts to guess whether or not
+a branch will be taken as soon as it is decoded, and gets the next instruction from the
+predicted location in the program. What we’re doing is the same as predicting that all branches
+are not taken.</p>
+
+<p>It turns out that accurate branch prediction is <em>extremely</em> important for performance in even
+a moderately deep pipeline, because <em>mispredicting</em> a branch introduces a bubble in the pipeline
+of length equal to the number of stages between the program counter and whichever stage is able
+to detect the misprediction (in our case, this is writeback, but with some effort, complex designs
+can do it in the execute stage). A modern x86 processor has a pipeline with around 12 stages in
+the relevant portion of the pipeline, so the misprediction penalty is <em>huge</em>.</p>
+
+<p>Branch prediction is a difficult problem, with an incredibly rich field of results and techniques.
+Modern branch predictors are <em>incredibly</em> accurate, achieving prediction accuracies in the
+neighborhood of 99%. Methods of branch prediction will be the topic of several future posts!</p>
+
+<h1 id="memory-is-slow">Memory is Slow</h1>
+
+<p>There’s a common joke around the internet about how Internet Explorer takes 10x as long as every
+other browser to serve a webpage. Memory is like the Internet Explorer of execution units. It takes
+<em>much</em> longer to read or write to RAM than to execute any other type of instruction.<sup id="fnref:9" role="doc-noteref"><a href="#fn:9" class="footnote" rel="footnote">9</a></sup> Given
+that we need to access RAM whenever we finish each small unit of computation, it’s completely
+unacceptable to spend over 99% of program execution time sitting around waiting for RAM.</p>
+
+<p>The idea of having registers as short-term, fast storage is so good that we can abuse it to
+solve this problem too.</p>
+
+<p>Instead of talking directly to RAM whenever we need to access it, we use a middle-man memory
+unit called a <em>cache</em>. Just like caching in your web browser, the cache in a CPU remembers data
+that it recently had to get from memory. Since the cache is smaller and closer to the CPU than
+RAM, it is much faster to access. If the memory we’re looking for is already in the cache, we
+can retrieve it in usually just a single cycle. This is called a “cache hit.” In the event of a
+cache miss, we only have to pay the huge penalty for accessing RAM one time, and then future
+references to the same data will go through the cache.</p>
+
+<p>When a program access some memory, it will almost always access the same memory or nearby memory
+soon after. Programs accessing nearby memory is called “spatial locality,” while the fact that
+those accesses are typically soon after each other is called “temporal locality.” Programs
+written to maximize spatial and temporal locality of memory accesses are likely to perform
+better if the computer has a cache.</p>
+
+<p>Cache design is a whole can of worms; figuring out the interaction size between cache and RAM
+(how much data to retrieve <em>surrounding</em> the requested data, assuming it will be needed soon),
+as well as the size of the cache itself, and when to evict cache entries to make room for new ones,
+are all important considerations. Additionally, most designs will use multiple layers of cache,
+keeping a smaller, extremely fast cache directly next to the execution circuitry, and a larger
+but somewhat slower cache near the edge of the CPU core. Multi-core systems often have a <em>third</em>
+layer, with a significantly larger and slower cache shared by all or several cores.</p>
+
+<p>We’re not going to get into it here, but it is important to be aware that caches exist and that
+they are not a one-size-fits-all solution to slow memory problems. On real hardware, writing
+programs in a “cache-aware” fashion, but without changing the underlying algorithm, can create
+performance improvements large enough to be noticeable by a human.</p>
+
+<h1 id="conclusions">Conclusions</h1>
+
+<p>From the outside, a computer is simply a black box which takes in an algorithm, executes it
+step-by-step, and spits out a result. In actuality, there are a huge host of techniques
+we can use to maintain this outside appearance, but achieve the same goals much, much faster.</p>
+
+<p>Pipelining lets us re-use existing hardware on several instructions at the same time, slowing
+down individual instructions but speeding up the clock and therefore also how many instructions
+complete per second. It introduces challenges in maintaining the data-flow and control-flow
+of the original program, but these challenges can be overcome without too much difficulty.</p>
+
+<p>We’ve also seen how we can use even basic branch prediction techniques to eliminate branch
+stalls if we’re able to “get lucky,” and hinted at the possibility that if we try very, very
+hard, we can “get lucky” almost every time.</p>
+
+<p>Finally, we’ve briefly discussed how slow memory is, and how we can use <em>caching</em> techniques
+to eliminate the large stalls associated with waiting for memory accesses.</p>
+
+<p>This crash-course overview covers more or less the same topics as a one-semester undergraduate
+computer architecture course. To avoid getting too mathematical, I covered caches in significantly
+less detail than such a course would.</p>
+
+<p>In future posts, we will take deep dives into particular advanced computer architecture techniques.
+We’ll look at other pipeline designs, particularly ones that can execute instructions out of
+order. We’ll also see various techniques for branch prediction, and discuss the design and
+construction of caches in significantly more detail.</p>
+
+<p>See you next time!</p>
+
+<hr />
+
+<div class="footnotes" role="doc-endnotes">
+  <ol>
+    <li id="fn:1" role="doc-endnote">
+      <p>It is surprisingly easy to prove that not everything can be computed, by constructing an
+  explicit example of a function which cannot be computed by any algorithm. The YouTube
+  channel “udiprod” has a <a href="https://www.google.com/url?sa=t&amp;rct=j&amp;q=&amp;esrc=s&amp;source=web&amp;cd=&amp;cad=rja&amp;uact=8&amp;ved=2ahUKEwjhgrS_grj5AhXPAjQIHTIFBEYQwqsBegQINxAB&amp;url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3D92WHN-pAFCs&amp;usg=AOvVaw2ovHeA16DSOFBsUvypP_rT">nice approachable video on this</a>
+  which I can highly recommend. <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:2" role="doc-endnote">
+      <p>The A stands for Architecture, because an ISA is generally considered half the design of
+  a computer. The other half is the hardware that interprets the instructions and does
+  what they say. <a href="#fnref:2" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:3" role="doc-endnote">
+      <p>Depending on the ISA, the register may be specified by the ISA itself (for example,
+  defining LDI to always place the value into register 0) or it may be specified as part
+  of the particular instruction. The same goes for all references to “specified register”
+  here. <a href="#fnref:3" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:4" role="doc-endnote">
+      <p>Where to jump to can be specified as an “absolute,” for example “go to step 4,” or as
+  a <em>relative</em>, for example “go back 3 steps.” Which one is used depends on the particular
+  ISA, and many ISAs use both for different instructions. <a href="#fnref:4" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:5" role="doc-endnote">
+      <p>In particular, accessing memory is <em>very</em> slow, but we’re not going to worry about
+  that yet. <a href="#fnref:5" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:6" role="doc-endnote">
+      <p>Up to a point. At some point, the fact that memory is so slow becomes the limiting
+  factor to how fast we can operate on data. The computer would be able to work on
+  any data as it comes from memory and be done before the next data is ready from
+  memory. Empirically, this happens in the neighborhood of 4 billion cycles per
+  second, or 4 GHz. Modern computers have clocks running at about that speed. <a href="#fnref:6" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:7" role="doc-endnote">
+      <p>Up to 3 times faster, though in practice the critical paths of the individual stages
+  will usually not each be exactly one third of the critical path of the non-pipelined
+  design. <a href="#fnref:7" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:8" role="doc-endnote">
+      <p>The implication being that there are models which execute instructions <em>out of order</em>,
+  and that is precisely why I’m writing this series. <a href="#fnref:8" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:9" role="doc-endnote">
+      <p>In the neighborhood of <em>200</em> clock cycles. <a href="#fnref:9" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+  </ol>
+</div>
+
+
+        <div class="PageNavigation">
+            
+            <hr>
+            
+            
+            
+            
+            <div class="right">
+                <div>Next</div>
+                <a href="/computer-science/hardware/2023/04/13/superscaling.html">Superscaling</a>
+            </div>
+            
+        </div>
+
+        <div id="credits">
+          <span class="credits left">Project maintained by <a href=""></a></span>
+          <span class="credits right">Hosted on GitHub Pages &mdash; Theme by <a href="https://twitter.com/michigangraham">mattgraham</a></span>
+        </div>
+ 
+      </section>
+
+    </div>
+
+    
+  </body>
+</html>

@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+<!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>What is Abstract Algebra, Anyway? | Max Kopinsky</title>
+<meta name="generator" content="Jekyll v4.2.2" />
+<meta property="og:title" content="What is Abstract Algebra, Anyway?" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="“Abstract Algebra” was a term that I frequently heard growing up in reference to difficult college-level math. When people want to make math sound scary, it’s a common go-to. I think this is just because it has the word “abstract” in the name. Certainly, no one who tried to scare me with it when I was young could actually tell me what it was." />
+<meta property="og:description" content="“Abstract Algebra” was a term that I frequently heard growing up in reference to difficult college-level math. When people want to make math sound scary, it’s a common go-to. I think this is just because it has the word “abstract” in the name. Certainly, no one who tried to scare me with it when I was young could actually tell me what it was." />
+<link rel="canonical" href="https://maxkopinsky.com/math/algebra/2022/07/16/what-is-abstract-algebra.html" />
+<meta property="og:url" content="https://maxkopinsky.com/math/algebra/2022/07/16/what-is-abstract-algebra.html" />
+<meta property="og:site_name" content="Max Kopinsky" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-07-16T21:00:00+00:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="What is Abstract Algebra, Anyway?" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BlogPosting","dateModified":"2022-07-16T21:00:00+00:00","datePublished":"2022-07-16T21:00:00+00:00","description":"“Abstract Algebra” was a term that I frequently heard growing up in reference to difficult college-level math. When people want to make math sound scary, it’s a common go-to. I think this is just because it has the word “abstract” in the name. Certainly, no one who tried to scare me with it when I was young could actually tell me what it was.","headline":"What is Abstract Algebra, Anyway?","mainEntityOfPage":{"@type":"WebPage","@id":"https://maxkopinsky.com/math/algebra/2022/07/16/what-is-abstract-algebra.html"},"url":"https://maxkopinsky.com/math/algebra/2022/07/16/what-is-abstract-algebra.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <link rel="stylesheet" href="/assets/css/style.css?v=">
+    <script src="https://code.jquery.com/jquery-1.12.4.min.js" integrity="sha256-ZosEbRLbNQzLpnKIkEdrPv7lOy9C27hHQ+Xp8a4MxAQ=" crossorigin="anonymous"></script>
+    <script src="/assets/js/respond.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <!--[if lt IE 8]>
+    <link rel="stylesheet" href="/assets/css/ie.css">
+    <![endif]-->
+    <!-- for mathjax -->
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({
+        extensions: [
+            "MathMenu.js",
+            "MathZoom.js",
+            "AssistiveMML.js",
+            "a11y/accessibility-menu.js"
+        ],
+        jax: ["input/TeX", "output/CommonHTML"],
+        loader: {load: ['[tex]/colortbl']},
+        TeX: {
+            packages: {'[+]': ['colortbl']},
+            extensions: [
+                "AMSmath.js",
+                "AMSsymbols.js",
+                "noErrors.js",
+                "noUndefined.js",
+            ]
+        }
+    });
+    </script>
+    <script type="text/javascript" async
+       src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML">
+    </script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+
+  </head>
+  <body>
+      <div id="header">
+        <nav>
+          <li class="fork"><a href="">View On GitHub</a></li>
+          
+        </nav>
+      </div><!-- end header -->
+
+    <div class="wrapper">
+
+      <section>
+        <div id="title">
+          <h1>Max Kopinsky</h1>
+          <p>Functional Programming, Formal Methods, Computer Architecture, and Math!</p>
+          <hr>
+        </div>
+
+        <h1>What is Abstract Algebra, Anyway?</h1>
+
+        <p>“Abstract Algebra” was a term that I frequently heard growing up in reference to difficult college-level math. When people want to make math sound scary, it’s a common go-to. I think this is just because it has the word “abstract” in the name. Certainly, no one who tried to scare me with it when I was young could actually tell me what it was.</p>
+
+<p>Is that because it truly is scary, or simply because they didn’t have access to good resources to learn it? We’re going to find out!</p>
+
+<p>In this mini-series I hope to approach Abstract Algebra from a simple angle, in terms of motivating examples and building up desirable properties. There will be little-to-no advanced math here. Equational reasoning skills will help, as may some previous exposure to proofs. This post is aimed at hobbyist or experienced programmers with a less formal mathematics background, or at interested pre-university mathematicians. Many motivating examples will be in terms of programming.</p>
+
+<p>This long introductory post aims to introduce the general concept of abstract algebra and motivate why we would want to use it.</p>
+
+<p>With all that out of the way, let’s get into the meat of it!</p>
+
+<h2 id="why-abstract-algebra">Why Abstract Algebra?</h2>
+
+<p>Indeed, why <em>math</em>? Mathematics gives us the tools to talk about various patterns we encounter every day. Algebra (the non-abstract kind) gives us the tools to talk about everyday constraints, like “What time do I have to leave my house to be at work at 9:00?” It can also talk about much more complicated, but still everyday problems, related to money, logistics, cooking, and just about anywhere else you might encounter an equals sign.</p>
+
+<p>Arithmetic gives us the tools to talk about various types of counting. For example, I know I have 12 cookies and 3 friends, and I want to count how many cookies each friend can get.</p>
+
+<p>Calculus gives us the tools to talk about rates and totals. How much does the circumference of a circle increase if you change the radius? What happens if you total up the lengths of the circumferences for circles of various radii?</p>
+
+<p>Geometry lets us talk about shapes without (necessarily) worrying about manipulating numbers.</p>
+
+<p>All of these things let us talk about concrete things, which we can touch and move around, or at least construct physical examples. Abstract algebra is tricky to view this way, because it is <em>abstract</em> by nature. Abstract algebra gives us the tools to talk about <em>structure</em> - what happens when we enforce certain rules on mathematical objects.</p>
+
+<p>But what does that even mean? Consider the natural numbers, \(\mathbb N\). If we don’t give them <em>structure</em>, we have a collection of weird symbols like \(3\) and \(42\) that we can’t manipulate. But we can give them a structure by declaring that they have an <em>order</em>. \(2\) comes after \(1\), \(3\) comes after \(2\), etc. Is there something special about this structure in particular? No, there isn’t. We could easily have put a different number first, for example. Or we could use completely different symbols, like emoji. Or why even stop at symbols - a stack of pennies has the same structure!</p>
+
+<p>So what we <em>really</em> gain from abstract algebra is the language to talk about three things:</p>
+
+<ol>
+  <li>Specific structures, like “the structure of \(\mathbb N\)”</li>
+  <li>Types of structures, such as “structures which can model counting”</li>
+  <li>Relationships between structures, such as how two seemingly different structures (like \(\mathbb N\) and a stack of pennies) are actually one and the same.</li>
+</ol>
+
+<p>The last one is where I find the real beauty in abstract algebra, and it lets us tie all sorts of different types of math together.</p>
+
+<h2 id="lets-get-into-it-what-is-a-structure">Let’s Get Into It: What is a Structure?</h2>
+
+<p>Now that we know what we’re talking about at a high level, let’s get a bit more specific. Obviously, as programmers or as mathematicians, we see these types of structures all the time. Programmers will recognize the stack of pennies as a linked list (or perhaps some other kind of list). But we can also talk about other shapes of structures entirely, so let’s get a bit more precise.</p>
+
+<p>Before we can talk about something have structure, we need to have, well, something. In our running example, the “something” is either \(\mathbb N\) or a collection of pennies. In either case, we have a collection of things - a <em>set</em>.</p>
+
+<p>Every “algebraic structure” is going to start with a set. This set is called the <em>domain</em> of the structure, or the <em>carrier set</em>. There are structures that have more than one domain, but we’re not going to talk about those in this post. In this post, we will only discuss <em>single-domain</em> structures.</p>
+
+<p>Then, we put structure on the set by defining (arbitrarily!) a <em>relationship</em> between the objects in the set. For our “natural number structure,” that relationship is the <em>followed-by</em> relation. \(2\) is <em>followed by</em> \(1\), etc. Now we ask ourselves what properties this structure has. We could list a few:</p>
+
+<ol>
+  <li>Every natural number is <em>followed by</em> another natural number.</li>
+  <li>\(0\) is special - there is no natural number \(n\) for which \(n\) is <em>followed by</em> \(0\).</li>
+  <li>For every natural number which is <em>not</em> \(0\), there is exactly one other natural number which it follows.</li>
+</ol>
+
+<p>In fact, these 3 properties exactly describe our structure. Here, we’re using our language in way #1 from above - we’re talking about a specific structure.</p>
+
+<p>Since these 3 properties exactly describe our structure, we should be able to state the same 3 properties for stacks of pennies:</p>
+
+<ol>
+  <li>For any stack of pennies, we can add another penny on top to get a taller stack.</li>
+  <li>The empty stack of pennies is special - there is no stack of pennies which we can add a penny to and end up with the empty stack.</li>
+  <li>For every stack of pennies which is not empty, there is exactly one stack of pennies which we can add a penny to get this one.</li>
+</ol>
+
+<p>These are the same 3 rules, just stated with slightly different wording. And they describe <em>exactly</em> the same structure, merely with a different carrier set.</p>
+
+<p>That means that anything we prove about stacks of pennies immediately applies to natural numbers as well - or to <em>anything else with this structure</em>. Thus what really matters is the properties that define our structure, and not the structure itself. Let’s rephrase our properties in a more general way.</p>
+
+<ol>
+  <li>For any element \(x\) of the domain, there is an element \(\sigma(x)\) which is also in the domain.</li>
+  <li>There is a special element \(0\) in the domain, and there is no \(x\) such that \(\sigma(x) = 0\).</li>
+  <li>For any element \(x \neq 0\) in the domain, there is exactly one element \(y\) in the domain such that \(\sigma(y) = x\).</li>
+</ol>
+
+<p>Now we refer to some generic “domain,” but we don’t actually care what it is. We only care that it has the structure dictated by these properties. These properties are commonly known as the “Peano axioms”<sup id="fnref:1" role="doc-noteref"><a href="#fn:1" class="footnote" rel="footnote">1</a></sup>.</p>
+
+<p>This structure is generically called the natural numbers, whether we use \(\mathbb N\) as the carrier set or stacks of pennies. I want to emphasize that our conceptual understanding of the structure comes from the properties, and not from the carrier set.</p>
+
+<p>The technical designation for this structure comes from the following facts about it:</p>
+
+<ol>
+  <li>The operation that dictates the structure, \(\sigma\) is <em>unary</em>, or takes one argument.</li>
+  <li>The operation distinguishes a particular element in the set, \(0\). Mathematicians call such operations “pointed.”</li>
+</ol>
+
+<p>So we would call the natural numbers a “pointed unary system.”</p>
+
+<h2 id="if-the-dress-fits-model-it">If the Dress Fits, Model It!</h2>
+
+<p>We’ve now taken a step <em>away</em> from concrete objects, and described how we talk about two things having the same structure. We define the structure’s properties, and show that both things satisfy those properties. We call these properties the <em>axioms</em> of the structure. When something concrete satisfies the axioms of a structure, we call it a <em>model</em> of that structure. It’s also pretty common to just call it the structure itself, so the set of pennies along with the “add a penny to the stack” operation may just be called the “penny system,” even though it’s the same system as the natural numbers.</p>
+
+<p>Whenever we prove something generic about the axioms, we’ve also proved that thing about <em>every</em> model of the axioms. Let’s see an example.</p>
+
+<p>The Peano Axioms we’ve been looking at describe <em>counting</em>. \(\sigma\), conceptually, is “count to the next number.” It turns out that anything with this structure also has a much more interesting structure. Using <em>counting</em>, we can describe <em>arithmetic</em>.</p>
+
+<p>Let’s propose some additional properties for addition:</p>
+
+<ol>
+  <li>For any two values \(x,y\), \(x + y\) exists.</li>
+  <li>If \(x + y = z\), then \(y + x = z\) as well.</li>
+  <li>If \((w + x) + y = z\), then \(w + (x + y) = z\) as well.</li>
+</ol>
+
+<p>Let’s suppose we have any model \((D, 0, \sigma)\) of the Peano axioms. This notation means that the carrier set is \(D\), along with the designated value \(0\) and the operation \(\sigma\) for counting. We can define addition as follows:</p>
+
+\[\begin{align} a + 0 &amp;= a, \\ a + \sigma(b) &amp;= \sigma(a + b). \end{align}\]
+
+<p>Now we want to check that it satisfies the properties we asked for. First, let’s suppose \(x,y \in D\). One of the two patterns above will fit \(x + y\), so we definitely have a definition for \(x + y\). Since (by axiom 1) \(\sigma(a + b)\) will always again be a natural number, we have that \(x + y\) does really exist.</p>
+
+<p>What about the second rule, which is usually called <em>commutivity</em>?</p>
+
+<p>First, let’s show that \(a + 0 = 0 + a\). If \(a = 0\), we’re done. So let’s assume that \(a \neq 0\).</p>
+
+\[\begin{aligned} 0 + a &amp;= 0 + \sigma(b) &amp; \text{By axiom 3} \\
+&amp;= \sigma(0 + b) &amp; \text{By the second pattern} \\
+&amp;= \sigma(b + 0) &amp; \text{Explained below} \\
+&amp;= \sigma(b) &amp; \text{By the first pattern} \\
+&amp;= a &amp; \text{By definition of } b\\
+&amp;= a + 0 &amp; \text{By the first pattern, applied in reverse} \end{aligned}\]
+
+<p>What about that step in the middle, where we used the fact that \(\sigma(0 + b) = \sigma(b + 0)\)? Doesn’t that rely on what we’re trying to prove?
+Well it does - but \(b\) is closer to \(0\) in the \(\sigma\)-chain than \(a\) is. So we could “unroll” the proof by writing out the steps for \(b\), and for \(b-1\), until we eventually terminate at \(0\). We know that we will eventually terminate, because our Axiom 3, or the <em>uniqueness axiom</em>, tells us that eventually, we will have to reach 0, and we know that our claim holds for 0. Formally, this reasoning is called <em>induction</em>.<sup id="fnref:2" role="doc-noteref"><a href="#fn:2" class="footnote" rel="footnote">2</a></sup></p>
+
+<p>To prove the general claim of \(x + y = y + x\), we would use a similar inductive step to show that \(x + \sigma(y) = \sigma(x) + y\), and then we would be able to “move” layers of \(\sigma\) from one side to the other until we get the balance correct. The details are left as an exercise.</p>
+
+<p>I’ll also leave proving the 3rd property of addition, <em>associativity</em>, as an exercise. It’s less annoying than commutativity.</p>
+
+<h2 id="so-what">So what?</h2>
+
+<p>So we’ve shown that any system that supports <em>counting</em> also supports <em>adding</em>. Why is that important?</p>
+
+<p>Addition is a <em>binary</em> operator. It takes two arguments, both natural numbers in this case, and produces a third natural number. Addition puts a much richer structure on the domain. Instead of only being able to say that \(3 \to 4\), \(4 \to 5\), and \(5 \to 6\), we can now make much broader, more comprehensive statements like \((3, 4) \to 7\). And this doesn’t only apply to numbers, but to <em>any</em> set that it makes sense to “count.” That’s a very powerful result!</p>
+
+<p>Some of the richest - and most practical - structures arise from single-domain, binary-operator systems. Mathematicians define a whole hierarchy of such structures, starting with no properties at all (a set with no operation) and gradually increasing the requirements of the operation to become more and more specific. The significant parts of this hierarchy look like this.</p>
+
+<p><img src="/assets/abstract-algebra/hierarchy.svg" /></p>
+
+<p>The structure we’ve been talking about here is a commutative monoid. As we continue to develop the language of abstract algebra, we will learn conceptually exactly what that means.</p>
+
+<p>Hopefully I’ve piqued your interest! In the next few posts we will describe each type of structure in the diagram and the arrows that it points to. That is, I want to describe each structure in terms of what it <em>adds</em> to something that we are already familiar with. As we get further down the line, we will see how identifying these types of structures can improve programs, clarify ideas, and help us make deep observations about the nature of (mathematical) existence.</p>
+
+<hr />
+
+<div class="footnotes" role="doc-endnotes">
+  <ol>
+    <li id="fn:1" role="doc-endnote">
+      <p>For simplicity, I’ve combined the fact that \(0\) exists with its special property. But technically these are two separate properties. If we don’t dictate that \(0\) must exist, then the empty set would satisfy all of the other properties! So the Peano axioms actually have <em>4</em> properties, with the first one being “0 is a natural number.” <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:2" role="doc-endnote">
+      <p>Typically, induction would be stated as a Peano Axiom. But the typical statements are all very difficult to parse and not conceptually enlightening. However, my handwavy description of “unrolling” the proof can be formalized. It turns out that defining that 0 is the “the smallest natural number,” in the way that we did, is equivalent to giving induction as an axiom. The details of the proof are outside the scope of this post. <a href="#fnref:2" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+  </ol>
+</div>
+
+
+        <div class="PageNavigation">
+            
+            <hr>
+            
+            
+            
+            
+            <div class="right">
+                <div>Next</div>
+                <a href="/math/algebra/2022/07/17/basic-structures.html">Conceptual Overview of Basic Algebraic Structures</a>
+            </div>
+            
+        </div>
+
+        <div id="credits">
+          <span class="credits left">Project maintained by <a href=""></a></span>
+          <span class="credits right">Hosted on GitHub Pages &mdash; Theme by <a href="https://twitter.com/michigangraham">mattgraham</a></span>
+        </div>
+ 
+      </section>
+
+    </div>
+
+    
+  </body>
+</html>

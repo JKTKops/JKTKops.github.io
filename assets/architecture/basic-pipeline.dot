@@ -1,0 +1,44 @@
+digraph Computer {
+    label = "A Basic Pipeline";
+    bgcolor="transparent";
+    fontcolor="white";
+    rankdir="LR";
+
+    node [ shape=box, color="white", fontcolor="white" ];
+    edge [ color="white", spline="spline" ];
+
+    subgraph cluster_fetch {
+        label="Fetch";
+        color="white";
+
+        PC [ pos="0,100", label="Program Counter" ];
+        Program [ pos="130, 100" ];
+        Decoder [ pos="230, 100" ];
+    };
+
+    fenceFE [ pos="325, 100", label="fence 1", height=2 ];
+
+    subgraph cluster_execute {
+        label="Execute";
+        color="white";
+        RF [ pos="440, 100", label="Register File" ];
+        ALU [ pos="560, 50" ];
+        Test [ pos="560, 100" ];
+        Memory [ pos="560, 150" ];
+    };
+
+    fenceEW [ pos="650, 100", label="fence 2", height=2 ];
+    //route [ shape="" ];
+
+    PC -> Program -> Decoder;
+    RF -> {Memory, ALU, Test};
+    {Memory, ALU} -> fenceEW;
+    fenceEW:e -> RF;
+
+    Test -> fenceEW;
+    fenceEW:e -> PC:s [ pos="800,0 800,-50 400,-100 50,-50" ];
+
+    Decoder -> fenceFE -> {RF, Memory, ALU, Test};
+    Decoder -> fenceFE -> fenceEW;
+}
+

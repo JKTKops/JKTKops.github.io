@@ -1,0 +1,2587 @@
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.2.2">Jekyll</generator><link href="https://maxkopinsky.com/feed.xml" rel="self" type="application/atom+xml" /><link href="https://maxkopinsky.com/" rel="alternate" type="text/html" /><updated>2023-04-13T05:09:18+00:00</updated><id>https://maxkopinsky.com/feed.xml</id><title type="html">Max Kopinsky</title><subtitle>Functional Programming, Formal Methods, Computer Architecture, and Math!</subtitle><entry><title type="html">Superscaling</title><link href="https://maxkopinsky.com/computer-science/hardware/2023/04/13/superscaling.html" rel="alternate" type="text/html" title="Superscaling" /><published>2023-04-13T04:00:00+00:00</published><updated>2023-04-13T04:00:00+00:00</updated><id>https://maxkopinsky.com/computer-science/hardware/2023/04/13/superscaling</id><content type="html" xml:base="https://maxkopinsky.com/computer-science/hardware/2023/04/13/superscaling.html"><![CDATA[<p>Continuing with the computer architecture posts, this time we’re going to explore superscaling.</p>
+
+<p>Before we start, my goal here is to eventually describe <em>in detail</em> the various components of a
+modern CPU architecture and how they work (and how they work <em>together</em>).
+I find that it’s quite difficult to find resources online
+about how such things actually work, and I think I can fill that gap.
+Therefore, this exploration is mostly setting the stage - exploring what those components are, but not how they work.</p>
+
+<p>There are some other great sources that cover modern architecture
+principles at a high level. <a href="https://www.lighterra.com/papers/modernmicroprocessors/">This one</a> is pretty good, for example.
+It’s not a prerequisite though. This series is self-contained.</p>
+
+<ul id="markdown-toc">
+  <li><a href="#the-goal---go-fast" id="markdown-toc-the-goal---go-fast">The Goal - Go Fast</a></li>
+  <li><a href="#superscaling" id="markdown-toc-superscaling">Superscaling</a>    <ul>
+      <li><a href="#two-separate-pipelines" id="markdown-toc-two-separate-pipelines">Two Separate Pipelines</a></li>
+      <li><a href="#new-perspectives" id="markdown-toc-new-perspectives">New Perspectives</a></li>
+      <li><a href="#hazards-revisited" id="markdown-toc-hazards-revisited">Hazards Revisited</a>        <ul>
+          <li><a href="#raw-hazards" id="markdown-toc-raw-hazards">RAW Hazards</a></li>
+          <li><a href="#waw-hazards" id="markdown-toc-waw-hazards">WAW Hazards</a></li>
+          <li><a href="#war-hazards" id="markdown-toc-war-hazards">WAR Hazards</a></li>
+          <li><a href="#control-hazards" id="markdown-toc-control-hazards">Control Hazards</a></li>
+          <li><a href="#structural-hazards" id="markdown-toc-structural-hazards">Structural Hazards</a></li>
+        </ul>
+      </li>
+      <li><a href="#working-harder-in-common-cases" id="markdown-toc-working-harder-in-common-cases">Working Harder in Common Cases</a></li>
+      <li><a href="#the-eflags-register" id="markdown-toc-the-eflags-register">The EFLAGS Register</a></li>
+    </ul>
+  </li>
+  <li><a href="#conclusions" id="markdown-toc-conclusions">Conclusions</a></li>
+</ul>
+
+<h1 id="the-goal---go-fast">The Goal - Go Fast</h1>
+
+<p>The driving goal of most computer architecture innovations is
+to go fast<sup id="fnref:1" role="doc-noteref"><a href="#fn:1" class="footnote" rel="footnote">1</a></sup>. In the <a href="/computer-science/hardware/2022/08/09/basics-overview.html">last post</a>,
+we saw how <em>pipelining</em> lets us speed up the processor
+by separating out the steps of an instruction, and executing
+one instruction in each step on every cycle. In contrast,
+a simple computer model executes one instruction every cycle.
+With pipelining, every cycle we make a little bit of progress on several different instructions.
+These different instructions are independent<sup id="fnref:2" role="doc-noteref"><a href="#fn:2" class="footnote" rel="footnote">2</a></sup> and so we can
+make these little bits of progress (almost) completely in parallel. As a result, we need less time
+per cycle to make progress. So we still finish one
+instruction per cycle, but the cycles are a lot shorter.</p>
+
+<p>So why not just make our pipeline extremely deep? For example,
+if we put a pipeline fence after every logic gate, we could run our clock extremely fast.
+However, above, we assumed that each instruction in the pipe was independent.
+In the last post, we saw that small pipelines can sometimes
+even justify that assumption. But if we make the pipeline
+very deep, that assumption is pretty much guaranteed to break.
+So our clock will be very fast, but we won’t be able to keep the
+pipeline saturated with instructions. Then we wouldn’t
+be finishing one instruction per cycle, and we wouldn’t be going fast.</p>
+
+<p>We want to go fast.</p>
+
+<p>There’s another problem too, which is that there’s some
+overhead for each pipeline stage. The stages have to be separated
+by pipeline registers, which are their own bit of circuitry and
+add some more propagation delay to the overall design. 
+If we put too many of them, the overhead from the pipeline registers
+starts slowing us down more than splitting the stages can speed us up.</p>
+
+<p>So making the pipeline as deep as physically possible is not the answer. What are some other potential answers?</p>
+
+<ol>
+  <li>Make the circuit smaller. Smaller <em>physical</em> distance for signals to travel means they will not have to travel as long.</li>
+  <li>Try very hard to <em>find</em> parallelism in the program and exploit it.</li>
+  <li>Demand that users write better programs.</li>
+</ol>
+
+<p>Idea #1 is just a plain win - if we can make the circuit smaller, we should. One of the first microprocessors, the Intel 4004, had transistors about 10 μm across. Recently, mass-production of designs using transistors about 20 <em>nm</em> across has begun.<sup id="fnref:3" role="doc-noteref"><a href="#fn:3" class="footnote" rel="footnote">3</a></sup>
+We’re starting to run up against the physical limit of how small something can be, but until then, we can keep trying to eek out more speed by getting smaller.</p>
+
+<p>Idea #2 is what we were getting at with pipelining. As long as that independence assumption holds, we can find
+<em>instruction-level parallelism</em> in the program and execute several
+instructions in parallel.</p>
+
+<p>Idea #3 sounds stupid, but in fact, is a very good idea. We shouldn’t let the idea that we have to be
+fast in <em>every possible situation</em> prevent us from
+doing something that is fast only for programs that
+know how to take advantage.</p>
+
+<p>There’s a balance that we can achieve between #2 and #3,
+where we try to be fast in general, but what we choose to do works best for programs
+that are written to work with what we’re doing.
+And this actually works in practice, because it’s not <em>people</em>
+writing the programs! Compilers write the programs, and compilers are very good
+at emitting assembly that can work well with whatever constraints we put on “good programs.”</p>
+
+<p>But even in the best case, there will be lots of opportunities for instruction-level parallelization that are only apaprent at runtime.
+For example, across iterations of a loop.
+Even the smartest compiler can’t help with that.</p>
+
+<p>So idea #3 can get us surprisingly far, but it has to go <em>together</em> with idea #2 if we really want improvements. Trying harder to find parallelism results
+in hardware that has to work very hard, which has colloquially become known
+as the “brainiac” paradigm: going faster by making processors smarter.</p>
+
+<p>So with that long introduction out of the way, let’s look at another way to exploit the parallelism we find.</p>
+
+<h1 id="superscaling">Superscaling</h1>
+
+<p>Ah, the title of the post!</p>
+
+<p>Superscaling is a technique to execute multiple instructions at a time, in a <em>different</em> way from pipelining.</p>
+
+<p>Remember that basic pipelining lets us complete at most 1 instruction per cycle. That still puts quite a limit on our speed. We’re executing multiple instructions at once, by separating them into stages.</p>
+
+<p>What if we could straight-up have multiple instructions <em>in the same stage</em> at the same time? Enter superscaling.</p>
+
+<p>So-called “superscalar architectures” are architectures that can have multiple instructions in the same pipeline stage at the same time. As long as the instructions are independent, everything still works great! We do, however, consume a lot more <em>space</em>, after all, we need circuitry for multiple instructions now.</p>
+
+<p>As we’ll see in future posts, some of that growth is non-linear.
+Some techniques need to analyze every pair of instructions
+that passes through a stage, every cycle. This means that we need quadratic circuit size
+in the number of instructions we can handle at once (the “width” of the architecture).
+As a result, modern processors are typically between 4 to 6-wide superscalar architectures.</p>
+
+<p>Let’s look into how this works in more detail, using an example based on the Intel P5 microarchitecture.</p>
+
+<h2 id="two-separate-pipelines">Two Separate Pipelines</h2>
+
+<p>The P5 microarchitecture has two separate pipelines called the <em>U</em> pipe and the <em>V</em> pipe. Here’s a high-level block diagram of the integer datapath:<sup id="fnref:4" role="doc-noteref"><a href="#fn:4" class="footnote" rel="footnote">4</a></sup></p>
+
+<p><img src="/assets/architecture/p5-high-level.svg" /></p>
+
+<p>In a sequential view, the instruction in the U pipe is the first instruction,
+and the instruction in the V pipe is the second instruction.</p>
+
+<p>If these instructions could have complicated interactions with each other,
+we would have to build complicated hardware to resolve those interactions.
+That could be bad - it could be slow or just too power-hungry.
+To save on complexity, there are a whole host of
+restrictions on “pairing.”</p>
+
+<p>The first decoding stage has to decode enough of two  instructions at a time to figure out if <em>pairing</em> is possible.
+If it is, then the two instructions are paired and
+sent to the corresponding pipes at the same time.</p>
+
+<p>The U pipe can execute any instruction, so when pairing
+is not possible, the first instruction is sent to the U
+pipe and the other instruction has to wait.</p>
+
+<p>These restrictions come
+back to our idea #3 above. It’s on the user to write a program
+such that adjacent instructions are pairable. The processor
+will still work if they aren’t - but it will work up to twice as fast if they are.</p>
+
+<h2 id="new-perspectives">New Perspectives</h2>
+
+<p>Even with pipelining, it’s been relatively easy to view out processor as executing the
+code in exactly the order specified. As we explore more
+techniques, this will become more and more difficult.</p>
+
+<p>Already, it can be tricky. When two instructions execute at once, we have to think about new kinds of issues that simply cannot happen in a scalar<sup id="fnref:5" role="doc-noteref"><a href="#fn:5" class="footnote" rel="footnote">5</a></sup> architecture, even a pipelined one.</p>
+
+<p>I suggest keeping this in mind. Even when it seems obvious that something “should work,”
+question it. Very strange things can go wrong if we’re not careful!</p>
+
+<h2 id="hazards-revisited">Hazards Revisited</h2>
+
+<p>In the last post, we looked at how RAW hazards, or Read After Write hazards, can complicate the implementation of a pipeline and require forwarding.</p>
+
+<p>Now that we can execute more than one instruction <em>at the same time</em>, some new types of hazards are possible.</p>
+
+<p>I’ll demonstrate by using some actual x86 code here, but no worries. We can demonstrate all of these new issues with simple instructions:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">mov r1,r2</code> copies the value in <code class="language-plaintext highlighter-rouge">r2</code> to <code class="language-plaintext highlighter-rouge">r1</code></li>
+  <li><code class="language-plaintext highlighter-rouge">j &lt;label&gt;</code> unconditionally jumps to the label.</li>
+</ul>
+
+<h3 id="raw-hazards">RAW Hazards</h3>
+
+<p>First, let’s consider the same RAW hazard as with basic pipelining, using a chain of <code class="language-plaintext highlighter-rouge">mov</code> instructions:</p>
+
+<pre><code class="language-x86asm">  mov bx, ax
+  mov cx, bx
+</code></pre>
+
+<p>There’s a RAW hazard between these instructions, since the second one Reads <code class="language-plaintext highlighter-rouge">bx</code>
+After the first one Writes <code class="language-plaintext highlighter-rouge">bx</code> (caps for emphasis).</p>
+
+<p>In the simple pipeline, this wasn’t a huge deal; we could easily forward the new value of <code class="language-plaintext highlighter-rouge">bx</code> from the writeback stage to the execute stage by the time it was needed.</p>
+
+<p>Here we have a new kind of problem - the V pipe needs <code class="language-plaintext highlighter-rouge">bx</code> <em>at the same time</em> that the U pipe produces it. 
+In theory, this could force the V pipe to stall while the U pipe proceeds,
+which would cause our pairings to get desynchronized.</p>
+
+<p>We have no choice but to prevent this from happening entirely.
+If two instructions have a RAW hazard,
+they can’t be paired.</p>
+
+<p>If they aren’t paired, then we can use the same forwarding techniques as the simple pipeline.</p>
+
+<p>But wait - question everything! Can we really?</p>
+
+<h3 id="waw-hazards">WAW Hazards</h3>
+
+<p>Consider this sequence:</p>
+
+<pre><code class="language-x86asm">  mov cx, ax
+  mov cx, bx
+  mov dx, cx
+</code></pre>
+
+<p>The first two <code class="language-plaintext highlighter-rouge">mov</code> instructions have no RAW hazard, so we can pair them. But they <em>both</em> write <code class="language-plaintext highlighter-rouge">cx</code>, so what happens when it’s time to writeback?</p>
+
+<p>Our writeback stage now needs to be able to detect these conflicts and resolve them. The resolution is simple - the instruction in the V pipe, which is logically<sup id="fnref:6" role="doc-noteref"><a href="#fn:6" class="footnote" rel="footnote">6</a></sup> second, wins.</p>
+
+<p>Our forwarding datapath also needs to be able to detect such conflicts and
+determine not just if <em>any</em> value should be forwarded,
+but <em>which</em> value.</p>
+
+<p>This is one of those quadratic scaling issues I mentioned earlier,
+because any pair of instructions might have a WAW hazard.</p>
+
+<p>Theoretically, this isn’t a huge deal. However, the P5 chose to resolve this issue
+by pre-empting it - WAW Hazards also prevent pairing.</p>
+
+<h3 id="war-hazards">WAR Hazards</h3>
+
+<p>The last type of data hazard is called a WAR Hazard, or write-after-read. These are also known as “false hazards,” because they don’t matter unless we start doing some pretty wacky things.</p>
+
+<p>The things we’re doing here aren’t wacky enough.</p>
+
+<p>Yay for us, that means we don’t have to worry about these ones.
+We’ll revist WAR Hazards in the next post on the <em>scoreboard</em> technique.</p>
+
+<h3 id="control-hazards">Control Hazards</h3>
+
+<p>In simple pipelining, we saw <em>control hazards</em> when instructions are able to enter the pipeline after a branch, but before that branch completes execution.</p>
+
+<p>Such instructions could end up modifying the state of the machine if we weren’t careful.</p>
+
+<p>The solution previously was to “squash” them.
+Once a branch completed execution, we could squash
+the pipeline up to whichever stage the branch was in.
+This replaces all of the instructions that shouldn’t
+have slipped in with <code class="language-plaintext highlighter-rouge">nop</code>s.</p>
+
+<p>Now things are more complicated:</p>
+
+<ul>
+  <li>What if <em>both</em> instructions being executed are branches?</li>
+  <li>What if the U-pipe instruction is a branch, and the V-pipe instruction writes memory?</li>
+</ul>
+
+<p>Let’s look at the first case:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  j A
+  j B
+</code></pre></div></div>
+
+<p>If we allow these to pair, they will both enter the execute stage at the same time. Which one wins?</p>
+
+<p>For WAW hazards, the answer was that the V-pipe instruction wins.
+But here, we need the U-pipe instruction to win!
+Once again, these differences can complicate hardware.</p>
+
+<p>What about the second case?</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  j A
+  mov [ax],bx
+</code></pre></div></div>
+
+<p>That <code class="language-plaintext highlighter-rouge">mov</code> instruction is a bit different from the other ones we’ve seen.
+The <code class="language-plaintext highlighter-rouge">[ax]</code> syntax means “the value <strong>in memory</strong> at the address given by <code class="language-plaintext highlighter-rouge">ax</code>.”</p>
+
+<p>In this case, the branch and the memory write would execute at the same time.
+By the time we find out that there’s a branch to take (or equivalently, that we’ve mispredicted the branch), 
+it’s too late to stop the memory write.</p>
+
+<p>This is bad.</p>
+
+<p>In fact, this is so bad that the P5 architecture 
+doesn’t allow paired branches in the U-pipe <em>at all</em>.</p>
+
+<p>That prevents both of these weird issues. It prevents the first issue,
+a U-pipe branch being paired with a V-pipe branch.
+And it prevents the second issue, a U-pipe branch being paired with a memory write.</p>
+
+<p>This means that branches can only pair in the V-pipe, which is a bit different from the typical case.
+Since the U-pipe can execute any instruction 
+(including branches - they just can’t be paired)
+the typical case is that the V-pipe instruction prevents pairing.</p>
+
+<p>Doing things this way allows instructions to pair with branches without running the risk of hitting the memory write issue.
+Since branches are common in practice, making them completely
+unpairable would be catastrophic.</p>
+
+<h3 id="structural-hazards">Structural Hazards</h3>
+
+<p>This is a completely new type of hazard, which we will see a lot more of in the next post.</p>
+
+<p>Various instructions need access to various <em>hardware resources</em> in order to do their jobs.
+For example, an add instruction needs access to an adder.
+Load and store instructions need access to the cache.</p>
+
+<p>Previously, when only one instruction could be in a stage at a time,
+we never had to worry about resources availability.
+Now we do.</p>
+
+<p>Designing a cache that can service multiple accesses
+on the same cycle is extremely difficult.
+It’s worth it - modern caches can typically support 2 loads and 2 stores at the same time.
+Cutting-edge caches can support more.</p>
+
+<p>The P5 microarchitecture is older and couldn’t pay the cost
+of such a cache. As a result, if paired instructions both need
+access to the cache, it results in stalls.
+However, we still allow them to pair.
+The parts of the instructions (if any) that don’t need
+to access the cache can still execute in parallel,
+so the overall cycle count will still be lower than
+if we refuse to pair them.</p>
+
+<p>I’d show a timing diagram here, but I haven’t been
+able to find a way to format a 2-pipe diagram that
+makes any sense. If you know of a format, let me know!</p>
+
+<p>Any other kind of shared resource is also liable to cause
+structural hazards.</p>
+
+<p>Resolving a structural hazard requires deciding which
+request for the resource will happen first, a process called <em>arbitration</em>.
+We then have to allow the selected request to access the resource, while stalling the other request.
+We have to keep track of pending requests so that we
+don’t forget them, which would be catastrophic.</p>
+
+<h2 id="working-harder-in-common-cases">Working Harder in Common Cases</h2>
+
+<p>A theme of all of the techniques we will see in the future is that there are some
+cases where doing better is <em>possible</em>, but simply
+too expensive.
+We’ve just seen a couple involving hazards!</p>
+
+<p>There’s a particular very common case of RAW/WAW hazards in x86. x86 has <code class="language-plaintext highlighter-rouge">push</code> and <code class="language-plaintext highlighter-rouge">pop</code>
+instructions that use a dedicated <em>stack pointer</em>
+register to help the programmer manage the call stack.</p>
+
+<p>A function might start with a sequence like this:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  push  bp
+  mov   bp,sp
+  push  ax
+  push  bx
+</code></pre></div></div>
+
+<p>This sequence sets up the stack frame for a function.
+<code class="language-plaintext highlighter-rouge">bp</code> is used for the frame pointer.
+Since code like this is involved in every function call,
+this is an <em>extremely</em> common pattern.</p>
+
+<p>But <code class="language-plaintext highlighter-rouge">push</code> both reads <em>and</em> writes <code class="language-plaintext highlighter-rouge">sp</code>, the stack pointer register.
+That means every single <code class="language-plaintext highlighter-rouge">push</code> instruction in this code causes a hazard!</p>
+
+<p>This case is so common that it’s worth trying to do better.
+The P5 microarchitecture contains “<code class="language-plaintext highlighter-rouge">sp</code> predictors”
+that recognize <code class="language-plaintext highlighter-rouge">push</code>/<code class="language-plaintext highlighter-rouge">pop</code>/<code class="language-plaintext highlighter-rouge">call</code>/<code class="language-plaintext highlighter-rouge">ret</code> instructions
+(all of which use <code class="language-plaintext highlighter-rouge">sp</code> on x86) and compute the <code class="language-plaintext highlighter-rouge">sp</code>
+value that the V-pipe instruction should see.
+They can do this in a pipeline stage <em>before</em> the U-pipe instruction executes,
+so that there is no delay needed for <code class="language-plaintext highlighter-rouge">sp</code>!
+In particular, these calculations happen in the Decode/AG stage,
+which is responsible for all types of Address Generation.</p>
+
+<p>The term “predictor” here just means that they compute
+something in advance. They aren’t like branch predictors,
+which can be wrong. The <code class="language-plaintext highlighter-rouge">sp</code> predictors always produce the right value.</p>
+
+<p>These predictors are able to break hazards on <code class="language-plaintext highlighter-rouge">sp</code> caused by those 4 instructions,
+which enables those 4 instructions to pair.<sup id="fnref:7" role="doc-noteref"><a href="#fn:7" class="footnote" rel="footnote">7</a></sup></p>
+
+<h2 id="the-eflags-register">The EFLAGS Register</h2>
+
+<p>Those of you familiar with x86 might have noticed something worrying -
+almost always, the instruction immediately before a branch
+computes a condition for the branch. x86 conditions
+come in several forms, and the computed conditions
+are stored in an <em>implicit</em> register called the <code class="language-plaintext highlighter-rouge">EFLAGS</code> register.</p>
+
+<p>So, wouldn’t such patterns cause a RAW Hazard on the <code class="language-plaintext highlighter-rouge">EFLAGS</code> register?</p>
+
+<p>Most of the reason for separating register read, execute, and register write stages in the pipeline
+is that we have to do complex execution with the
+values we read, which takes time; and we need to be able
+to forward results quickly, which also takes time,
+so it helps if the values to forward come from the
+start of a stage instead of the end.</p>
+
+<p>However, access to <code class="language-plaintext highlighter-rouge">EFLAGS</code> is simple.
+Each instruction can only read it <em>or</em> write it.
+Since it’s not general-purpose like the other registers,
+it’s also less complicated to keep track of.</p>
+
+<p>This means we can keep the <code class="language-plaintext highlighter-rouge">EFLAGS</code> register entirely in the execute stage,
+and resolve hazards on the register inside the stage!</p>
+
+<p>As a result, <code class="language-plaintext highlighter-rouge">EFLAGS</code> hazards never prevent pairing.
+The hardware to resolve those hazards inside the stage
+adds some complication, but it’s not too bad,
+and it is <em>absolutely</em> worth it.</p>
+
+<p>Something important to point out is that resolving those hazards can introduce delay into the system.
+If the U-pipe instruction can’t produce flag values
+for a long time, and the V-pipe instruction is a branch
+that needs to read them, the branch circuitry has to
+wait for the flag values to propagate through the stage’s
+circuit.
+The fact that this is possible at all would slow down our clock
+even when the instructions in the execute stage don’t care.</p>
+
+<p>We have to design our pipeline carefully so that this extra delay is not a limiting factor.
+In the P5 microarchitecture, the pipeline stages are split up
+so that the execute stage instructions can produce their
+flag values very quickly. Most of the stage’s delay
+comes from the fact that it also handles memory writes.
+If things would take too long, the execute stage can
+stall. This allows us to trade extra cycles in some rare cases
+for clock speed in <em>all</em> cases. That’s a good deal!</p>
+
+<h1 id="conclusions">Conclusions</h1>
+
+<p>Multi-pipe superscaling is the first technique we’ve seen that lets us
+execute multiple instructions per cycle. For the first
+time, we’ve been talking about <em>instructions per cycle</em> instead of <em>cycles per instruction</em>.</p>
+
+<p>We’re still limited by slow instructions. Multiplication typically takes several cycles, for example, which will stall <em>both</em> pipes until its done.</p>
+
+<p>We saw a new type of hazard that was not a problem before.
+We also saw how it can be worth it to try extra hard in a common case,
+even when it’s too expensive to resolve a complication in general.
+This phenomenon will continue through every other technique we see.</p>
+
+<p>The P5 microarchitecture was far from the first superscalar architecture,
+but it was the first superscalar architecture for x86.
+Due to x86’s complexity, such a thing was previously
+thought to be impossible. In fact, even just being able
+to effectively <em>pipeline</em> an x86 architecture was thought
+to be impossible!</p>
+
+<p>I chose to use the P5 architecture as an example here because an overview at this level doesn’t care
+so much about the specific machine language.
+But the P5 microarchitecture tells a compelling story
+in the history of computer architecture.</p>
+
+<p>No matter how complicated the domain gets, no matter
+what issues and hazards arise, nothing will stop us
+in our pursuit of Going Fast.</p>
+
+<p>Up until this point, we’ve been constrained by the simple notion
+that we read instructions in some order and they should execute in that order.</p>
+
+<p>In the next post, we’re going to start to see how even something as powerful as ordering constraints
+is unable to stop us from Going Fast.</p>
+
+<p>See you then!</p>
+
+<hr />
+
+<div class="footnotes" role="doc-endnotes">
+  <ol>
+    <li id="fn:1" role="doc-endnote">
+      <p>The rest are inspired by trying to reduce power consumption. Going fast has historically been the driving factor; reducing power consumption of a technique for going fast comes <em>after</em> inventing the technique in the first place. <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:2" role="doc-endnote">
+      <p>When they aren’t independent, we start running into <em>data hazards</em>, described in the <a href="/computer-science/hardware/2022/08/09/basics-overview.html">last post</a>. <a href="#fnref:2" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:3" role="doc-endnote">
+      <p>You may have seen reference to the “3 nm process.” This is a misnomer - it’s just a marketing term. The transistors produced by the 3 nm process are <em>not</em> 3 nm across. That said, they are still really small. <a href="#fnref:3" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:4" role="doc-endnote">
+      <p>I do mean high-level - these are the components of the pipeline, but not arranged how they are actually laid out on the chip. Also, the P5 microarchitecture has an on-chip floating point unit which is not shown here. Due to how x87 floating point works, that unit has its own registers and pipeline. There’s also a lot of additional complexity for virtual addressing and cache management, which we aren’t worried about here. <a href="#fnref:4" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:5" role="doc-endnote">
+      <p>“Scalar” in this context means “one instruction per cycle.” <a href="#fnref:5" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:6" role="doc-endnote">
+      <p>“Logically” means that it came second in the input program. This is in constrast to <em>architecturally</em>, where it is simultaneous with the first <code class="language-plaintext highlighter-rouge">mov</code> instead of after it. <a href="#fnref:6" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:7" role="doc-endnote">
+      <p>Actually (because of course there’s an “actually”), x86’s <code class="language-plaintext highlighter-rouge">ret</code> instruction can optionally take an integer operand. When it does, instead of only popping a return address off the stack, it will pop the given amount of extra space <em>before</em> popping the return address. This is not common and would make <code class="language-plaintext highlighter-rouge">sp</code> prediction harder. The P5 doesn’t do it. Such <code class="language-plaintext highlighter-rouge">ret</code> instructions remain unpairable if they are involved in hazards on <code class="language-plaintext highlighter-rouge">sp</code>. <a href="#fnref:7" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+  </ol>
+</div>]]></content><author><name></name></author><category term="computer-science" /><category term="hardware" /><summary type="html"><![CDATA[Continuing with the computer architecture posts, this time we’re going to explore superscaling.]]></summary></entry><entry><title type="html">Crash Course on Principles of Computer Architecture</title><link href="https://maxkopinsky.com/computer-science/hardware/2022/08/09/basics-overview.html" rel="alternate" type="text/html" title="Crash Course on Principles of Computer Architecture" /><published>2022-08-09T02:00:00+00:00</published><updated>2022-08-09T02:00:00+00:00</updated><id>https://maxkopinsky.com/computer-science/hardware/2022/08/09/basics-overview</id><content type="html" xml:base="https://maxkopinsky.com/computer-science/hardware/2022/08/09/basics-overview.html"><![CDATA[<p>In this category of posts, we’re going to talk about computer architecture.</p>
+
+<p>For completeness, before getting into any of the crazy (and crazy <em>cool</em>!) modern technologies,
+I want to give a crash-course overview of the basics of computer architecture. How do computers
+work at the logical level?</p>
+
+<p>Most posts in this series are going to be deep dives into a particular technology, how it works,
+and how it might be implemented. However, I don’t feel justified in getting into that without
+having an accompanying crash course on the pre-requisites.</p>
+
+<p>This post is going to zoom through what should be a one-semester undergraduate university course.
+It won’t be comprehensive, but should get the ideas across.</p>
+
+<ul id="markdown-toc">
+  <li><a href="#what-is-a-computer" id="markdown-toc-what-is-a-computer">What is a Computer?</a></li>
+  <li><a href="#capabilities" id="markdown-toc-capabilities">Capabilities</a></li>
+  <li><a href="#a-simple-model" id="markdown-toc-a-simple-model">A Simple Model</a>    <ul>
+      <li><a href="#performance" id="markdown-toc-performance">Performance</a></li>
+    </ul>
+  </li>
+  <li><a href="#pipelining" id="markdown-toc-pipelining">Pipelining</a>    <ul>
+      <li><a href="#data-hazards" id="markdown-toc-data-hazards">Data Hazards</a></li>
+      <li><a href="#resolving-raw-hazards" id="markdown-toc-resolving-raw-hazards">Resolving RAW Hazards</a></li>
+      <li><a href="#method-1-pipeline-stall" id="markdown-toc-method-1-pipeline-stall">Method 1: Pipeline Stall</a></li>
+      <li><a href="#method-2-data-forwarding" id="markdown-toc-method-2-data-forwarding">Method 2: Data Forwarding</a></li>
+    </ul>
+  </li>
+  <li><a href="#pipelining-with-control-flow" id="markdown-toc-pipelining-with-control-flow">Pipelining With Control Flow</a>    <ul>
+      <li><a href="#control-hazards" id="markdown-toc-control-hazards">Control Hazards</a></li>
+    </ul>
+  </li>
+  <li><a href="#memory-is-slow" id="markdown-toc-memory-is-slow">Memory is Slow</a></li>
+  <li><a href="#conclusions" id="markdown-toc-conclusions">Conclusions</a></li>
+</ul>
+
+<h1 id="what-is-a-computer">What is a Computer?</h1>
+
+<p>It’s easy to see computers as magical black boxes. One common joke is that “Computers are just
+rocks we tricked into thinking.” And that’s actually sort of true. But computers don’t <em>think</em>
+the way we do. Really, computers are nothing more than glorified calculators. The images you
+see on your screen are the results of (sometimes complex) calculations to produce location
+and color data for each pixel. Everything comes down to moving around data and performing
+arithmetic on that data.</p>
+
+<p>A typical definition of a computer is “a machine that can be programmed to carry out sequences
+of arithmetic or logical operations automatically.” We might ask what can be computed in this
+way; namely: if I give you a function definition, and some inputs to that function, what types
+of computers are capable of evaluating the function on those inputs? The study of different
+types of computers is called <em>models of computation</em>. The highest class of model of computation
+contains “computers that can compute anything which <em>can</em> be computed.”<sup id="fnref:1" role="doc-noteref"><a href="#fn:1" class="footnote" rel="footnote">1</a></sup> Those are what we’re
+concerned with here.</p>
+
+<h1 id="capabilities">Capabilities</h1>
+
+<p>A computer has to be programmable by the definition above. Computers will get their programs as
+a sequence of steps to perform. Each step tells the computer to use a single one of its capabilities.
+Computers have some short-term storage called <em>registers</em>. They can operate directly only on values
+that are in registers.</p>
+
+<p>The most basic capabilities of a modern computer all fall into one of the following categories:</p>
+
+<ol>
+  <li>Retrieve data from memory into a register (“memory load”)</li>
+  <li>Place data into memory from a register (“memory store”)</li>
+  <li>Perform arithmetic (or logic) on two numbers in registers</li>
+  <li>Redirect to a different location in the sequence of steps, for example “Go to step 4.”</li>
+  <li><em>Conditionally</em> redirect, for example “Go to step 4, but only if x is 0.”</li>
+</ol>
+
+<p>After performing one step, we move on to the next step in the sequence.</p>
+
+<p>Any particular computer has a particular set of instructions that it can understand, called
+an “instruction set,” or ISA<sup id="fnref:2" role="doc-noteref"><a href="#fn:2" class="footnote" rel="footnote">2</a></sup>. Of course,
+it doesn’t understand them written in English. They have to be encoded in binary in a consistent
+way which depends on the particular computer. We’re not going to concern ourselves with that
+encoding here. We’ll assume the existence of a circuit called a “decoder,” which translates the
+binary-encoded instruction into a bunch of “control signals” which control what the rest of the
+computer does.</p>
+
+<p>We’re also not going to worry about modelling a computer that can compute <em>quickly</em>. Computing
+at all will do for now, and we’ll worry about being fast later.</p>
+
+<p>Common instructions available in most instruction sets are:</p>
+
+<ol>
+  <li>LDI (or “Load Immediate”): place a specified value into a specified register<sup id="fnref:3" role="doc-noteref"><a href="#fn:3" class="footnote" rel="footnote">3</a></sup></li>
+  <li>ADD: add the values in two specified registers, storing the result into a third specified register</li>
+  <li>Other arithmetic or logic operations, for example AND, OR, and SUB</li>
+  <li>JMP: redirect to a given instruction in the program<sup id="fnref:4" role="doc-noteref"><a href="#fn:4" class="footnote" rel="footnote">4</a></sup></li>
+  <li>BRANCH: conditionally redirect, using a specified condition to test a specified value.</li>
+</ol>
+
+<p>So what do we need to implement all of this?</p>
+
+<ol>
+  <li>Somewhere to store the program</li>
+  <li>Some collection of registers (typically called a “Register File”)</li>
+  <li>Some type of data memory</li>
+  <li>Circuitry that can perform arithmetic and logic (typically called an Arithmetic/Logic Unit,
+ or ALU)</li>
+  <li>A counter to keep track of where we are in the program</li>
+  <li>A way to overwrite the counter</li>
+  <li>Circuitry that can test conditions</li>
+</ol>
+
+<h1 id="a-simple-model">A Simple Model</h1>
+
+<p>Here’s a very basic way we could combine the above pieces into something resembling a computer.</p>
+
+<center>
+<img src="/assets/architecture/basic-computer.svg" />
+</center>
+
+<p>The decoder controls what everything else does. It tells memory to load or store (or do nothing),
+it tells the register file which registers to read and write, the ALU what operation to perform,
+the test unit what logical test to use, and the program counter whether or not it should overwrite
+and with what value (possibly depending on the result of the test, which comes from the test unit).</p>
+
+<p>This is actually a perfectly good basic model of a computer. Modern computers don’t look like this,
+but they have components that are individually recognizable as components of this model.</p>
+
+<h2 id="performance">Performance</h2>
+
+<p>A computer based on this model is going to be bad. Why?</p>
+
+<p>Each “cycle” of the computer is controlled by a clock. When the clock ticks, we move on to the next
+step according to the program counter. We need to give each step enough time for all of the
+control and data signals to propogate through the whole system. For some of these signals, that
+might be slow<sup id="fnref:5" role="doc-noteref"><a href="#fn:5" class="footnote" rel="footnote">5</a></sup>. Say the slowest signal chain starts from the program counter, goes through the
+program, decoder, register file, ALU, and back to the register file (perhaps for an operation
+like division, which is fairly slow to perform). This slowest chain is called the <em>critical path</em>.
+If it takes half a second for a signal to get all the way through the critical path, then we cannot
+run our clock any faster than 0.5s/cycle (alternatively, 2 cycles per second or 2 Hz).</p>
+
+<p>Even though some, or even most, instructions won’t use the critical path, any instruction <em>might</em>
+be the instruction that does. So the critical path is the limiting factor to our clock speed.
+The clock speed is a significant factor when considering the speed of a computer. A faster clock
+will almost always mean a faster computer<sup id="fnref:6" role="doc-noteref"><a href="#fn:6" class="footnote" rel="footnote">6</a></sup>.</p>
+
+<p>So the first way we can think of to improve the clock speed is to make the critical path shorter.</p>
+
+<h1 id="pipelining">Pipelining</h1>
+
+<p>The major improvement to the basic design, used in all modern systems, is called <em>pipelining</em>.
+We don’t want to limit our system to only working on a single instruction at a time, and being
+stuck until that instruction is done. We also want to make the critical path shorter. We can
+hit both birds with one stone: split up the execution of an instruction into several “stages,”
+where each stage takes one clock cycle.</p>
+
+<p>Since an instruction can only occupy one stage at a time, if we have 3 stages then we can
+also be “executing” 3 instructions at once. We also run the clock faster<sup id="fnref:7" role="doc-noteref"><a href="#fn:7" class="footnote" rel="footnote">7</a></sup>, but this is
+negated by the fact that it also takes more cycles for an individual instruction to finish.</p>
+
+<p>These are the relevant numbers concerning a pipeline:</p>
+
+<ol>
+  <li>Clock speed: how many clock cycles we get per second</li>
+  <li>Latency: how many clock cycles it takes to execute one instruction from start to finish</li>
+  <li>Throughput: how many instructions complete each clock cycle</li>
+</ol>
+
+<p>For our basic model here, the throughput should stay at 1, even though the latency has increased.
+Since we’re running the clock faster, that means we’re finishing more instructions <em>per second</em>,
+so our computer is going faster. In an ideal world, the latency triples, the clock speed gets cut
+into 1/3, and the throughput remains 1. That works out to our computer running about three times
+faster, without any changes to the program!</p>
+
+<p>To implement pipelining, we use “pipeline registers,” also called “fences,” to separate each
+stage. We can modify the basic design to something like this, for a 3-stage example.</p>
+
+<p><img src="/assets/architecture/basic-pipeline.svg" /></p>
+
+<p>This gives us a <em>mostly</em> clean division between each stage of the pipeline - fetch, execute,
+and writeback. But hang on - stage 3 doesn’t appear to exist at all!</p>
+
+<p>Stage 3 is the “writeback” stage, where the results are written to where they have to go, which
+is either the register file or program counter (memory writes are handled in the second stage,
+which is called “execute”). What logic there is to handle in this stage would be built into
+the register file and program counter, so there’s no new units here. But that does mean
+there isn’t a clear separation between stages. As you might expect, that causes major problems.</p>
+
+<p>Consider the instruction sequence that adds register A to register B, storing to register C,
+and then adds register C to register D, storing back to register A. We can visualize what’s
+going on with a <em>timing table</em> as follows:</p>
+
+\[\begin{array}{|c|c|c|c|}
+\hline
+\text{stage} &amp; \text{cycle 1} &amp; \text{cycle 2} &amp; \text{cycle 3} &amp; \text{cycle 4} \\
+\hline
+\text{Fetch} &amp; \mathtt{ADD\ A\ B\ C} &amp; \tt{ADD\ C\ D\ A} &amp; - &amp; - \\
+\hline
+\text{Execute} &amp; - &amp; \tt{ADD\ A\ B\ C} &amp; \tt{ADD\ C\ D\ A} &amp; - \\
+\hline
+\text{Write} &amp; - &amp; - &amp; \tt{ADD\ A\ B\ C} &amp; \tt{ADD\ C\ D\ A} \\
+\hline
+\end{array}\]
+
+<p>This table shows us the instruction in each stage at any given cycle. We could also write
+these as instructions vs time, instead of stage vs time, but I find this way a bit easier.</p>
+
+<p>There’s a big problem with this program. The result of the first instruction won’t be available
+in the register file until <em>after</em> the cycle that the instruction writes back. But looking at
+cycle 3 in the table, the second instruction needs to read register C as input on the same cycle!</p>
+
+<p>So what gives, and how can we fix it?</p>
+
+<h2 id="data-hazards">Data Hazards</h2>
+
+<p>The above problem is known as a <em>data hazard</em>, specifically of the read-after-write kind. This
+is often abbreviated RAW. Hazards describe types of <em>data dependencies</em>, where the order of
+instructions in the program implicitly connect instructions which write and read the same data
+from a register. A RAW hazard means that we must not read the register until after the write
+has completed.</p>
+
+<p>There are other types of hazards as well. If we have a write-after-read hazard, then we must
+ensure that the instruction which reads is able to read the data <em>before</em> it is overwritten
+by the write. There are also write-after-write hazards, which require us to enforce that
+results are written in the correct order so that the correct data is in registers after
+the instruction sequence.</p>
+
+<p>Since our model executes instructions in order<sup id="fnref:8" role="doc-noteref"><a href="#fn:8" class="footnote" rel="footnote">8</a></sup>, WAR and WAW hazards simply cannot happen.</p>
+
+<h2 id="resolving-raw-hazards">Resolving RAW Hazards</h2>
+
+<p>There are two ways we could try to resolve the RAW hazard in the above program.</p>
+
+<p>The first, and most obvious solution, is to force <code class="language-plaintext highlighter-rouge">ADD C D A</code> to wait until <code class="language-plaintext highlighter-rouge">ADD A B C</code> completes
+writeback before allowing it to execute. This is tricky to implement, however, because up to
+this point we have always assumed that instructions move through the pipeline at exactly one
+stage per cycle - no more, no less. However it’s certainly possible and this approach is known as
+a “pipeline stall.”</p>
+
+<p>The better solution is to provide a <em>shortcut</em> for <code class="language-plaintext highlighter-rouge">ADD C D A</code>’s writeback so that it is accessible
+to an executing instruction in the same cycle. This technique is called <em>data forwarding</em>.</p>
+
+<p>Either way, we have to detect that two instructions have a hazard; this is generally easy as we
+can just remember which register(s) are used by every instruction and compare the registers being
+read in the execute stage to the registers being written in the write-back stage.</p>
+
+<h2 id="method-1-pipeline-stall">Method 1: Pipeline Stall</h2>
+
+<p>Using the first approach, we need to modify our first pipeline fence so that it gets an extra
+control signal. This signal describes if it should output the stored instruction at all. If it
+shouldn’t, it should instead output a <code class="language-plaintext highlighter-rouge">NOP</code> instruction, which is short for “no operation.”</p>
+
+<p><code class="language-plaintext highlighter-rouge">NOP</code>s which enter the pipeline due to stalls are commonly called <em>pipeline bubbles</em>, since they
+behave identically to air bubbles in a water pipe.</p>
+
+<p>Additionally, if we stall, we need to prevent the program counter from advancing, or else we will
+lose the stalled instruction.</p>
+
+<p>Adding a hazard control unit to our model, we can come up with a computer design like the following.</p>
+
+<p><img src="/assets/architecture/stall-pipeline.svg" /></p>
+
+<p>With this approach, the same program experiences the following timing table:</p>
+
+\[\begin{array}{|c|c|c|c|}
+\hline
+\text{stage} &amp; \text{cycle 1} &amp; \text{cycle 2} &amp; \text{cycle 3} &amp; \text{cycle 4} &amp; \text{cycle 5}\\
+\hline
+\text{Fetch} &amp; \mathtt{ADD\ A\ B\ C} &amp; \tt{ADD\ C\ D\ A} &amp; \tt{ADD\ C\ D\ A} &amp; - &amp; - \\
+\hline
+\text{Execute} &amp; - &amp; \tt{ADD\ A\ B\ C} &amp; \tt{NOP} &amp; \tt{ADD\ C\ D\ A} &amp; - \\
+\hline
+\text{Write} &amp; - &amp; - &amp; \tt{ADD\ A\ B\ C} &amp; \tt{NOP} &amp; \tt{ADD\ C\ D\ A} \\
+\hline
+\end{array}\]
+
+<p>I think once these tables get complicated, they are easier to read if we put the pipeline on
+the horizontal axis, to match the pipeline diagrams. Let’s do that from now on; here’s the
+same table transposed.</p>
+
+\[\begin{array}{|c|c|c|c|}
+\hline
+\text{cycle} &amp; \text{Fetch} &amp; \text{Execute} &amp; \text{Write} \\
+\hline
+1 &amp; \tt{ADD\ A\ B\ C} &amp; - &amp; - \\
+\hline
+2 &amp; \tt{ADD\ C\ D\ A} &amp; \tt{ADD\ A\ B\ C} &amp; - \\
+\hline
+3 &amp; \tt{ADD\ C\ D\ A} &amp; \tt{NOP} &amp; \tt{ADD\ A\ B\ C} \\
+\hline
+4 &amp; - &amp; \tt{ADD\ C\ D\ A} &amp; \tt{NOP} \\
+\hline
+5 &amp; - &amp; - &amp; \tt{ADD\ C\ D\ A} \\
+\hline
+\end{array}\]
+
+<p>We can see that the <code class="language-plaintext highlighter-rouge">NOP</code> bubble causes the whole program to take an extra cycle, as expected.</p>
+
+<h2 id="method-2-data-forwarding">Method 2: Data Forwarding</h2>
+
+<p>Instead, let’s use a <em>forwarding unit</em> behind the register file to detect these hazards, and
+forward data from the writeback stage. We get a design that looks as follows.</p>
+
+<p><img src="/assets/architecture/forward-pipeline.svg" /></p>
+
+<p>Now we get a timing table which is the same as the original one, except this time it works!</p>
+
+<p>There is a potential complication with this design though. Often, the critical path of the
+system with this type of design is <em>already</em> in the execute stage (although this is by no means
+a guarantee). The Forwarding Unit, while cheap, does introduce some extra signal delay and
+can make the critical path longer, slowing down the clock.</p>
+
+<p>Additionally, this plan only works if the writeback stage is immediately after the stage
+performing the read. If retrieving instructions from the program is fast, we may opt to place the
+fetch-execute fence so that the register file read happens in the fetch stage instead. This
+would mean there is a two cycle gap between register reads and register writes, so two adjacent
+instructions with a RAW dependency cannot use this forwarding scheme directly. Multi-stage
+separation like this is pretty much always the case in real designs. Ideally, we combine both
+approaches. We stall exactly long enough for the data to be available for forwarding.</p>
+
+<h1 id="pipelining-with-control-flow">Pipelining With Control Flow</h1>
+
+<p>That simple example program didn’t make any use of the control flow capabilities of the computer -
+(conditionally) jumping. Let’s look at what happens if we execute a simple program like this.</p>
+
+<pre><code class="language-mips">ADD A, B, C
+JMP 2       # jump forward two instructions
+ADD B, C, D # this should be skipped
+SUB C, B, A
+</code></pre>
+
+<p>Remember that the control signals for jump instructions go through the Test unit, which is
+in the execute stage. Perhaps you can already see where this is going! Here’s the timing table.</p>
+
+\[\begin{array}{|c|c|c|c|}
+\hline
+\text{cycle} &amp; \text{Fetch} &amp; \text{Execute} &amp; \text{Write} \\
+\hline
+1 &amp; \tt{ADD\ A,\ B,\ C} &amp; - &amp; - \\
+\hline
+2 &amp; \tt{JMP\ 2} &amp; \tt{ADD\ A,\ B,\ C} &amp; - \\
+\hline
+3 &amp; \tt{ADD\ B,\ C,\ D} &amp; \tt{JMP\ 2} &amp; \tt{ADD\ A,\ B,\ C} \\
+\hline
+4 &amp; \tt{SUB\ C,\ B,\ A} &amp; \tt{ADD\ B,\ C,\ D} &amp; \tt{JMP\ 2} \\
+\hline
+5 &amp; \tt{SUB\ C,\ B,\ A} &amp; \tt{SUB\ C,\ B,\ A} &amp; \tt{ADD\ B,\ C,\ D} \\
+\hline
+6 &amp; - &amp; \tt{SUB\ C,\ B,\ A} &amp; \tt{SUB\ C,\ B,\ A} \\
+\hline
+7 &amp; - &amp; - &amp; \tt{SUB\ C,\ B,\ A} \\
+\hline
+\end{array}\]
+
+<p>Oh no! The <code class="language-plaintext highlighter-rouge">ADD B, C, D</code> instruction and even an extra copy of the <code class="language-plaintext highlighter-rouge">SUB</code> instruction,
+snuck into the pipeline before we realized we were supposed to skip forward!</p>
+
+<p>What gives, and how do we fix it?</p>
+
+<h2 id="control-hazards">Control Hazards</h2>
+
+<p>The fact that there is time between fetching a jump (or branch) instruction, and actually
+redirecting the program counter, means that there will always be a chance for instructions that
+should have been skipped to sneak into the pipeline. This is called a <em>control hazard</em>.</p>
+
+<p>Since we’re not omniscient, and neither is our computer, there’s not really anything we can
+do to make the program go faster in every case, unlike with the RAW hazards. In future posts,
+we’ll see some methods that can work in <em>most</em> cases.</p>
+
+<p>The simplest approach is after decoding a jump (or branch) instruction, we simply stall until
+it completes execution and then continue after being redirected. This, obviously, introduces
+large pipeline bubbles and is generally not ideal.</p>
+
+<p>An easy potential improvement to that is to have separate data paths (signal paths through
+the circuit) for jump and branch instructions, since jumps can be detected and executed
+much more easily. In our simple computer architecture, we can most likely detect jump instructions
+directly in the decoder and execute them in the Fetch stage without causing critical path issues.</p>
+
+<p>A harder improvement is to consider that, sometimes, the instruction that would sneak into the
+pipeline actually <em>should</em> be the next instruction. We don’t know it yet, but we could hope to
+get lucky. When the branch actually executes, if the branch is in fact taken, we have to track
+down those “hopeful” instructions and remove them from the pipeline. For our simple pipelines,
+this is easy - it’s every instruction in the pipeline in an earlier stage than the branch.
+We remove those instructions by replacing them with <code class="language-plaintext highlighter-rouge">NOP</code>s, which is called <em>squashing the pipeline</em>.</p>
+
+<p>We can implement that in our pipeline registers by adding some control ability. When we need to
+stall, the fence currently (1) does not read new input from the previous stage, and (2) does
+not send its stored instruction to the next stage (sending a <code class="language-plaintext highlighter-rouge">NOP</code> instead). In order to squash,
+the fence should replace the stored instruction with a <code class="language-plaintext highlighter-rouge">NOP</code> instead of reading new input from
+the previous stage. Next cycle, after the program counter redirect, the Fetch stage will contain
+the correct next instruction, prepared to send it into the first fence. The squashed instructions
+have all become <code class="language-plaintext highlighter-rouge">NOP</code>s.</p>
+
+<p>An architecture block diagram and timing table for the above program with this scheme could look
+like this.</p>
+
+<p><img src="/assets/architecture/speculative-pipeline.svg" /></p>
+
+\[\begin{array}{|c|c|c|c|}
+\hline
+\text{cycle} &amp; \text{Fetch} &amp; \text{Execute} &amp; \text{Write} \\
+\hline
+1 &amp; \tt{ADD\ A,\ B,\ C} &amp; - &amp; - \\
+\hline
+2 &amp; \tt{JMP\ 2} &amp; \tt{ADD\ A,\ B,\ C} &amp; - \\
+\hline
+3 &amp; \tt{SUB\ C,\ B,\ A} &amp; \tt{NOP} &amp; \tt{ADD\ A,\ B,\ C} \\
+\hline
+4 &amp; - &amp; \tt{SUB\ C,\ B,\ A} &amp; \tt{NOP} \\
+\hline
+5 &amp; - &amp; - &amp; \tt{SUB\ C,\ B,\ A} \\
+\hline
+\end{array}\]
+
+<p>We executed the unconditional jump immediately in the fetch stage (and have the decoder
+pass on a <code class="language-plaintext highlighter-rouge">NOP</code> instead of the now-useless <code class="language-plaintext highlighter-rouge">JMP</code>). As a result, the erroneous instruction
+never enters the pipeline at all, and we even finish two cycles faster. Nice!</p>
+
+<p>What if that unconditional jump was a conditional branch? Let’s not worry about types of
+conditional branches here; let’s just assume that the same <code class="language-plaintext highlighter-rouge">JMP 2</code> instruction now needs
+to use the Test unit. We get a timing table like this one.</p>
+
+\[\begin{array}{|c|c|c|c|}
+\hline
+\text{cycle} &amp; \text{Fetch} &amp; \text{Execute} &amp; \text{Write} \\
+\hline
+1 &amp; \tt{ADD\ A,\ B,\ C} &amp; - &amp; - \\
+\hline
+2 &amp; \tt{JMP\ 2} &amp; \tt{ADD\ A,\ B,\ C} &amp; - \\
+\hline
+3 &amp; \tt{ADD\ B,\ C,\ D} &amp; \tt{JMP\ 2} &amp; \tt{ADD\ A,\ B,\ C} \\
+\hline
+4 &amp; \tt{SUB\ C,\ B,\ A} &amp; \tt{ADD\ B,\ C,\ D} &amp; \tt{JMP\ 2} \\
+\hline
+5 &amp; \tt{SUB\ C,\ B,\ A} &amp; \tt{NOP} &amp; \tt{NOP} \\
+\hline
+6 &amp; - &amp; \tt{SUB\ C,\ B,\ A} &amp; \tt{NOP} \\
+\hline
+7 &amp; - &amp; - &amp; \tt{SUB\ C,\ B,\ A} \\
+\hline
+\end{array}\]
+
+<p>As before, we still let the erroneous <code class="language-plaintext highlighter-rouge">ADD</code> and <code class="language-plaintext highlighter-rouge">SUB</code> instructions into the pipeline,
+but now we squash them when the <code class="language-plaintext highlighter-rouge">JMP</code> instruction goes to write back. Since they never
+reach the writeback stage themselves, the values they computed are never stored in the
+register file. It’s like the instructions never existed at all.</p>
+
+<p>A more advanced technique called <em>branch prediction</em> attempts to guess whether or not
+a branch will be taken as soon as it is decoded, and gets the next instruction from the
+predicted location in the program. What we’re doing is the same as predicting that all branches
+are not taken.</p>
+
+<p>It turns out that accurate branch prediction is <em>extremely</em> important for performance in even
+a moderately deep pipeline, because <em>mispredicting</em> a branch introduces a bubble in the pipeline
+of length equal to the number of stages between the program counter and whichever stage is able
+to detect the misprediction (in our case, this is writeback, but with some effort, complex designs
+can do it in the execute stage). A modern x86 processor has a pipeline with around 12 stages in
+the relevant portion of the pipeline, so the misprediction penalty is <em>huge</em>.</p>
+
+<p>Branch prediction is a difficult problem, with an incredibly rich field of results and techniques.
+Modern branch predictors are <em>incredibly</em> accurate, achieving prediction accuracies in the
+neighborhood of 99%. Methods of branch prediction will be the topic of several future posts!</p>
+
+<h1 id="memory-is-slow">Memory is Slow</h1>
+
+<p>There’s a common joke around the internet about how Internet Explorer takes 10x as long as every
+other browser to serve a webpage. Memory is like the Internet Explorer of execution units. It takes
+<em>much</em> longer to read or write to RAM than to execute any other type of instruction.<sup id="fnref:9" role="doc-noteref"><a href="#fn:9" class="footnote" rel="footnote">9</a></sup> Given
+that we need to access RAM whenever we finish each small unit of computation, it’s completely
+unacceptable to spend over 99% of program execution time sitting around waiting for RAM.</p>
+
+<p>The idea of having registers as short-term, fast storage is so good that we can abuse it to
+solve this problem too.</p>
+
+<p>Instead of talking directly to RAM whenever we need to access it, we use a middle-man memory
+unit called a <em>cache</em>. Just like caching in your web browser, the cache in a CPU remembers data
+that it recently had to get from memory. Since the cache is smaller and closer to the CPU than
+RAM, it is much faster to access. If the memory we’re looking for is already in the cache, we
+can retrieve it in usually just a single cycle. This is called a “cache hit.” In the event of a
+cache miss, we only have to pay the huge penalty for accessing RAM one time, and then future
+references to the same data will go through the cache.</p>
+
+<p>When a program access some memory, it will almost always access the same memory or nearby memory
+soon after. Programs accessing nearby memory is called “spatial locality,” while the fact that
+those accesses are typically soon after each other is called “temporal locality.” Programs
+written to maximize spatial and temporal locality of memory accesses are likely to perform
+better if the computer has a cache.</p>
+
+<p>Cache design is a whole can of worms; figuring out the interaction size between cache and RAM
+(how much data to retrieve <em>surrounding</em> the requested data, assuming it will be needed soon),
+as well as the size of the cache itself, and when to evict cache entries to make room for new ones,
+are all important considerations. Additionally, most designs will use multiple layers of cache,
+keeping a smaller, extremely fast cache directly next to the execution circuitry, and a larger
+but somewhat slower cache near the edge of the CPU core. Multi-core systems often have a <em>third</em>
+layer, with a significantly larger and slower cache shared by all or several cores.</p>
+
+<p>We’re not going to get into it here, but it is important to be aware that caches exist and that
+they are not a one-size-fits-all solution to slow memory problems. On real hardware, writing
+programs in a “cache-aware” fashion, but without changing the underlying algorithm, can create
+performance improvements large enough to be noticeable by a human.</p>
+
+<h1 id="conclusions">Conclusions</h1>
+
+<p>From the outside, a computer is simply a black box which takes in an algorithm, executes it
+step-by-step, and spits out a result. In actuality, there are a huge host of techniques
+we can use to maintain this outside appearance, but achieve the same goals much, much faster.</p>
+
+<p>Pipelining lets us re-use existing hardware on several instructions at the same time, slowing
+down individual instructions but speeding up the clock and therefore also how many instructions
+complete per second. It introduces challenges in maintaining the data-flow and control-flow
+of the original program, but these challenges can be overcome without too much difficulty.</p>
+
+<p>We’ve also seen how we can use even basic branch prediction techniques to eliminate branch
+stalls if we’re able to “get lucky,” and hinted at the possibility that if we try very, very
+hard, we can “get lucky” almost every time.</p>
+
+<p>Finally, we’ve briefly discussed how slow memory is, and how we can use <em>caching</em> techniques
+to eliminate the large stalls associated with waiting for memory accesses.</p>
+
+<p>This crash-course overview covers more or less the same topics as a one-semester undergraduate
+computer architecture course. To avoid getting too mathematical, I covered caches in significantly
+less detail than such a course would.</p>
+
+<p>In future posts, we will take deep dives into particular advanced computer architecture techniques.
+We’ll look at other pipeline designs, particularly ones that can execute instructions out of
+order. We’ll also see various techniques for branch prediction, and discuss the design and
+construction of caches in significantly more detail.</p>
+
+<p>See you next time!</p>
+
+<hr />
+
+<div class="footnotes" role="doc-endnotes">
+  <ol>
+    <li id="fn:1" role="doc-endnote">
+      <p>It is surprisingly easy to prove that not everything can be computed, by constructing an
+  explicit example of a function which cannot be computed by any algorithm. The YouTube
+  channel “udiprod” has a <a href="https://www.google.com/url?sa=t&amp;rct=j&amp;q=&amp;esrc=s&amp;source=web&amp;cd=&amp;cad=rja&amp;uact=8&amp;ved=2ahUKEwjhgrS_grj5AhXPAjQIHTIFBEYQwqsBegQINxAB&amp;url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3D92WHN-pAFCs&amp;usg=AOvVaw2ovHeA16DSOFBsUvypP_rT">nice approachable video on this</a>
+  which I can highly recommend. <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:2" role="doc-endnote">
+      <p>The A stands for Architecture, because an ISA is generally considered half the design of
+  a computer. The other half is the hardware that interprets the instructions and does
+  what they say. <a href="#fnref:2" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:3" role="doc-endnote">
+      <p>Depending on the ISA, the register may be specified by the ISA itself (for example,
+  defining LDI to always place the value into register 0) or it may be specified as part
+  of the particular instruction. The same goes for all references to “specified register”
+  here. <a href="#fnref:3" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:4" role="doc-endnote">
+      <p>Where to jump to can be specified as an “absolute,” for example “go to step 4,” or as
+  a <em>relative</em>, for example “go back 3 steps.” Which one is used depends on the particular
+  ISA, and many ISAs use both for different instructions. <a href="#fnref:4" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:5" role="doc-endnote">
+      <p>In particular, accessing memory is <em>very</em> slow, but we’re not going to worry about
+  that yet. <a href="#fnref:5" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:6" role="doc-endnote">
+      <p>Up to a point. At some point, the fact that memory is so slow becomes the limiting
+  factor to how fast we can operate on data. The computer would be able to work on
+  any data as it comes from memory and be done before the next data is ready from
+  memory. Empirically, this happens in the neighborhood of 4 billion cycles per
+  second, or 4 GHz. Modern computers have clocks running at about that speed. <a href="#fnref:6" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:7" role="doc-endnote">
+      <p>Up to 3 times faster, though in practice the critical paths of the individual stages
+  will usually not each be exactly one third of the critical path of the non-pipelined
+  design. <a href="#fnref:7" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:8" role="doc-endnote">
+      <p>The implication being that there are models which execute instructions <em>out of order</em>,
+  and that is precisely why I’m writing this series. <a href="#fnref:8" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:9" role="doc-endnote">
+      <p>In the neighborhood of <em>200</em> clock cycles. <a href="#fnref:9" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+  </ol>
+</div>]]></content><author><name></name></author><category term="computer-science" /><category term="hardware" /><summary type="html"><![CDATA[In this category of posts, we’re going to talk about computer architecture.]]></summary></entry><entry><title type="html">What are Monoids and Groups?</title><link href="https://maxkopinsky.com/math/algebra/2022/07/18/monoids-and-groups.html" rel="alternate" type="text/html" title="What are Monoids and Groups?" /><published>2022-07-18T22:00:00+00:00</published><updated>2022-07-18T22:00:00+00:00</updated><id>https://maxkopinsky.com/math/algebra/2022/07/18/monoids-and-groups</id><content type="html" xml:base="https://maxkopinsky.com/math/algebra/2022/07/18/monoids-and-groups.html"><![CDATA[<p>In <a href="/math/algebra/2022/07/18/more-basics.html">the last post</a>, we explored
+unital magma, quasigroups, loops, and groupoids. Each structure arose by adding
+more restrictions to the binary operation of the structure.</p>
+
+<p><img src="/assets/abstract-algebra/hierarchy.svg" /></p>
+
+<p>When we looked at groupoids, we saw how the combination of restrictions can lead
+to generalized results about <em>all</em> groupoids, like the inverse of the inverse
+theorem, and the inverse of product theorem.</p>
+
+<p>In this post, we’re going to start looking at monoids, which have a set of properties
+satisfied by, well, nearly everything. In particular, monoids appear <em>everywhere</em>
+in programs.</p>
+
+<ul id="markdown-toc">
+  <li><a href="#monoids-from-categories-totality" id="markdown-toc-monoids-from-categories-totality">Monoids (From Categories): Totality</a></li>
+  <li><a href="#monoids-from-semigroups-identities" id="markdown-toc-monoids-from-semigroups-identities">Monoids (From Semigroups): Identities</a></li>
+  <li><a href="#monoids-from-unital-magma-association" id="markdown-toc-monoids-from-unital-magma-association">Monoids (From Unital Magma): Association</a></li>
+  <li><a href="#monoid-examples" id="markdown-toc-monoid-examples">Monoid Examples</a>    <ul>
+      <li><a href="#booleans" id="markdown-toc-booleans">Booleans</a></li>
+      <li><a href="#pointed-semigroups" id="markdown-toc-pointed-semigroups">Pointed Semigroups</a></li>
+      <li><a href="#lists" id="markdown-toc-lists">Lists</a></li>
+      <li><a href="#turing-machines" id="markdown-toc-turing-machines">Turing Machines</a>        <ul>
+          <li><a href="#why" id="markdown-toc-why">Why?</a></li>
+          <li><a href="#ability-to-generalize" id="markdown-toc-ability-to-generalize">Ability to Generalize</a></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li><a href="#groups" id="markdown-toc-groups">Groups</a></li>
+  <li><a href="#one-final-property-getting-to-work" id="markdown-toc-one-final-property-getting-to-work">One Final Property: Getting To Work</a></li>
+  <li><a href="#conclusion" id="markdown-toc-conclusion">Conclusion</a></li>
+</ul>
+
+<h1 id="monoids-from-categories-totality">Monoids (From Categories): Totality</h1>
+
+<p>Categories didn’t have a requirement that multiplication be total. For many pairs
+of arrows, it doesn’t make sense to chain them together. It only works if they have
+the same intermediate node in the graph.</p>
+
+<p>Let’s require the multiplication to be total.</p>
+
+<p>For that to work, every pair of arrows is going to have to go to and from the same
+graph node. As a result, there is only one graph node (and there are multiple arrows
+from that node to itself).</p>
+
+<p>This gives us a view of monoids as categories. We have identites (every arrow is
+an identity, in this view).</p>
+
+<p>However this view isn’t super useful, because every arrow is the same. This model
+kind of sucks. We could modify how we look at the model to make it more interesting.
+Or… we could let the same thing happen by starting somewhere else.</p>
+
+<h1 id="monoids-from-semigroups-identities">Monoids (From Semigroups): Identities</h1>
+
+<p>Semigroups have associative, total multiplication, but they don’t have to have
+identities. Our example of a finite semigroup was to start with some arbitrary set
+\(A\). Then we considered a set of functions, \(F\), where each function \(f \in F\)
+is from \(A\) to \(A\). Function composition in any set is total and associative.</p>
+
+<p>But the only function which is an identity under composition is the function that
+maps any \(a : A\) to itself, which we write as either \(f(a) = a\), or \(a \mapsto a\).
+We didn’t require that this function be in \(F\) when we considered semigroups.</p>
+
+<p>For monoids, we’re going to require it.</p>
+
+<p>The identity function is a function that “does nothing.” This is spectacularly useful.
+Not only do we know that there is an identity that works for every function in \(F\),
+we know what it is. And if we need to conjure up an element of our monoid to use somewhere,
+we can always safely use this identity because multiplication by it will never “mess up”
+another value.</p>
+
+<h1 id="monoids-from-unital-magma-association">Monoids (From Unital Magma): Association</h1>
+
+<p>Starting from an operation which has an identity and which is total, we can get a monoid
+by also requiring it to be associative. I unfortunately don’t have a good way to
+visualize this change. Please let me know if you do!</p>
+
+<p>Correspondingly, a structure which is both a unital magma <em>and</em> a semigroup will always
+be a monoid.</p>
+
+<h1 id="monoid-examples">Monoid Examples</h1>
+
+<h2 id="booleans">Booleans</h2>
+
+<p>Let’s consider some examples. Let’s start with the set \(\mathbb B = \{ true, false \}\). Let’s pick
+the common operation “or”:</p>
+
+\[\begin{aligned}
+false &amp;\| false &amp;= false \\
+false &amp;\| true  &amp;= true  \\
+true  &amp;\| false &amp;= true  \\
+true  &amp;\| true  &amp;= true  \\
+\end{aligned}\]
+
+<p>As we can see, \(false\) certainly acts as the identity on either side. Operating false
+on false gives false, false on true gives true. We can check that it’s associative
+(exercise). And, the above table shows that it’s total.</p>
+
+<p>This gives us the monoid \((\mathbb B, false, \|)\), or “booleans with or.”</p>
+
+<p>Sometimes, there’s more than one way to imbue a set with a monoid structure. What if
+we pick a different operation?</p>
+
+\[\begin{aligned}
+false\ &amp; \&amp;\&amp;\ false &amp;= false \\
+false\ &amp; \&amp;\&amp;\ true  &amp;= false \\
+true\  &amp; \&amp;\&amp;\ false &amp;= false \\
+true\  &amp; \&amp;\&amp;\ true  &amp;= true  \\
+\end{aligned}\]
+
+<p>Now \(true\) is an identity<sup id="fnref:1" role="doc-noteref"><a href="#fn:1" class="footnote" rel="footnote">1</a></sup>. This gives us a different monoid over the same domain,
+\((\mathbb B, true, \&amp;\&amp;)\), or “booleans with and.”</p>
+
+<h2 id="pointed-semigroups">Pointed Semigroups</h2>
+
+<p>Notice that we can recover a semigroup from any monoid by simply “forgetting” the identity
+element. If we neglect to point out that \(true\) is the identity of \(\&amp;\&amp;\), we get the
+<em>semigroup</em> \((\mathbb B, \&amp;\&amp;)\).</p>
+
+<p>There’s a way that we can describe functions between <em>structures</em> - the function
+from monoids to semigroups, defined by \(F(D, e, *) = (D, *)\), is known as a <em>forgetful
+functor</em>. I’ll probably have some future posts exploring this idea further, as it can be
+combined with category theory to do some pretty general things.</p>
+
+<p>The nicest thing it can do is <em>be reversed</em>. If we have some semigroup, we can attach a new
+element \(e\) to the domain of the semigroup and define \(e\) to be the identity. This new
+\(e\) is called a “point,”<sup id="fnref:2" role="doc-noteref"><a href="#fn:2" class="footnote" rel="footnote">2</a></sup> and it might not be distinguishable from every element already
+in the domain. If the semigroup already had an identity which was forgotten, then we can prove
+that \(e\) and the identity are one and the same.</p>
+
+<p>Regardless, sometimes we have a semigroup without an identity, and this construction allows us
+to summon one out of thin air.</p>
+
+<p>Let’s consider a little bit of C code for a moment.</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">struct</span> <span class="n">SomeSemigroup</span><span class="p">;</span> <span class="c1">// opaque</span>
+
+<span class="n">SomeSemigroup</span> <span class="o">*</span><span class="nf">times</span><span class="p">(</span><span class="n">SomeSemigroup</span> <span class="n">x</span><span class="p">,</span> <span class="n">SomeSemigroup</span> <span class="n">y</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p>By assumption, <code class="language-plaintext highlighter-rouge">times</code> here is an associative operation, which may or may not have
+an identity element. We don’t know. But we can <em>extend</em> the operation with a new
+identity as follows;</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">SomeSemigroup</span> <span class="o">*</span><span class="n">id</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+
+<span class="n">SomeSemigroup</span> <span class="o">*</span><span class="nf">times_extension</span><span class="p">(</span><span class="n">SomeSemigroup</span> <span class="o">*</span><span class="n">x</span><span class="p">,</span> <span class="n">SomeSemigroup</span> <span class="o">*</span><span class="n">y</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">x</span> <span class="o">==</span> <span class="n">id</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">y</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">y</span> <span class="o">==</span> <span class="n">id</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">x</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="k">else</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">times</span><span class="p">(</span><span class="o">*</span><span class="n">x</span><span class="p">,</span> <span class="o">*</span><span class="n">y</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>This new semigroup is now a monoid. The identity is <code class="language-plaintext highlighter-rouge">NULL</code>. It may be that there was
+already some other identity in semigroup; in this case, <code class="language-plaintext highlighter-rouge">NULL</code> is functionally
+indistinguishable from that other identity within the semigroup structure.</p>
+
+<p>A common example of a semigroup in programming languages is non-empty array(list)s. We can
+append any two arrays to get a third, and this append operation is associative. We have an
+additional (useful) structure that we can lookup any element in an array and get something
+meaningful back, since they are never empty.</p>
+
+<p>But sometimes, when initializing an array for an algorithm, for example, it’s truly useful
+to be able to say that it is initially empty. We can recover a structure where that is
+allowed by appending a new point to our array semigroup, the null pointer, and extending
+the concatenation operation as above.</p>
+
+<p>Now even if the language allowed empty arrays (as most do), the empty array and the null
+pointer are functionally indistinguishable. You can’t lookup values from either of them,
+and appending either one to another array will result in that other array.</p>
+
+<p>We say that the null pointer and the empty array are <em>isomorphic</em>. They carry the same
+information. In this case, that is no information at all! We can easily write a pair
+of functions to witness the isomorphism<sup id="fnref:3" role="doc-noteref"><a href="#fn:3" class="footnote" rel="footnote">3</a></sup>. One of them sends the empty array to <code class="language-plaintext highlighter-rouge">NULL</code>,
+the other sends <code class="language-plaintext highlighter-rouge">NULL</code> to the empty array. While we generally have a <em>structural</em>
+definition of equality in programs, what we often truly want is <em>informational</em> equality,
+where two objects are equal if they are isomorphic.</p>
+
+<p>The exact meaning of isomorphic can differ with respect to context. Sometimes the structure
+is information that we care about (for example, trees). Thinking about what exactly equality
+means for a particular datatype and implementing it correctly can avoid major headache-
+inducing bugs. The concept of monoids (indeed, unital magma) tells us that if we have
+two different objects which are <em>both</em> the identities of a type’s core operation, then we should
+probably be writing a <em>normalizing</em> function, which replaces one with the other, because they
+must be functionally indistinguishable.</p>
+
+<h2 id="lists">Lists</h2>
+
+<p>What if we have some unknown type \(T\), and we want to imbue it with a monoid structure?
+Perhaps we want to be able to put off deciding what binary operation to use until later,
+if there are several choices. Or perhaps there’s no reasonable choice at all, but we
+still want to be able to put things together.</p>
+
+<p>One common example of this is validation, or <em>parsing</em>. We may encounter an error while
+validating a piece of data, but we don’t want our program to just fail immediately.</p>
+
+<p>Instead, we want to combine all the errors that we discover during the entire process of
+validation (or at least, as far as we can go), so that the user can get as much relevant
+information as possible back from our tool. It’s not really meaningful to “combine” errors.
+We could append the callstacks and append the messages, but that doesn’t tell anyone anything.
+If anything, it’s actively confusing. Instead, we just want some monoid structure that leaves
+individual errors alone.</p>
+
+<p>We can always construct such a structure. Instead of considering elements of \(T\) itself,
+we consider elements of a new type, \(L(T)\). \(L(T)\) is the type of lists containing
+elements of type \(T\). Each element of \(T\) corresponds exactly to a singleton list
+containing it. We call the function from \(T \to L(T)\) an <em>injection</em>, because it “injects”
+elements of \(T\) into this monoid structure. For example, the definition might be as
+simple as <code class="language-plaintext highlighter-rouge">inject(t) = List.singleton(t)</code>, in a language where this syntax makes sense.</p>
+
+<p>Now the monoid multiplication is list concatenation, which as above is associative. If we
+need to conjure up an element from nowhere, we have to be able to do that <em>without</em> relying
+on the existence of things in \(T\). Perhaps we are initializing our parser and we need
+some initial value for the set of errors. It’s perfectly safe to choose the empty list,
+because it is the identity of this monoid and the concatenation with non-empty lists
+later won’t cause weird things to happen to our structure.</p>
+
+<p>This is a very real example of why being able to conjure up a “nothing” element of a type
+is extremely useful!</p>
+
+<p>If you’re a programmer, you’ve probably written loops like this before:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">bool</span> <span class="n">flag</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+<span class="k">while</span> <span class="p">(</span><span class="n">someCondition</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">do_some_work</span><span class="p">();</span>
+    <span class="n">flag</span> <span class="o">=</span> <span class="n">flag</span> <span class="o">||</span> <span class="n">checkFlag</span><span class="p">();</span>
+<span class="p">}</span>
+<span class="k">if</span> <span class="p">(</span><span class="n">flag</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">clean_up</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p><code class="language-plaintext highlighter-rouge">flag</code> here is acting in the \((\mathbb B, false, \|)\) monoid. If the body of the loop
+is also implementing some type of monoidal behavior<sup id="fnref:4" role="doc-noteref"><a href="#fn:4" class="footnote" rel="footnote">4</a></sup>, we could <em>combine</em> these two
+monoids and possibly clean up our code.</p>
+
+<h2 id="turing-machines">Turing Machines</h2>
+
+<p>I want to leave off this overview of monoids with a quick proof that every program can be
+described by the structure of some monoid.</p>
+
+<p>Firstly, it is well known that any program can be represented by a Turing Machine. It’s generally
+fairly easy to find such a machine, because the semantics of the programming language are
+usually defined in terms of an abstract machine, which is then implemented in terms of some
+assembly language, which is itself (usually) quite close to a Turing Machine on its own.</p>
+
+<p>A Turing Machine is its own kind of structure, generally written \((Q, \Gamma, b, \Sigma,
+\delta, q_0, F)\). In order, we have a set of states, a set of symbols that we can write to
+some kind of memory, a designated “blank symbol,” which appears in any memory cell that has
+not yet been written to, a subset of \(\Gamma\) representing the symbols which can be in
+memory before we start (the “program input”), a set of <em>transitions</em>, an initial state,
+and a set of final states.</p>
+
+<p>The Turing Machine starts in the “initial configuration,” where the memory has some input
+symbols in it, the machine is pointed at a particular memory cell, and is in the initial state.
+It executes by using the <em>transitions</em>, which describe for each state, how to use the value
+of memory currently being looked at to decide how to modify the current memory cell and switch
+to a different one, as well as possibly also switching states.</p>
+
+<p>In any configuration of the turing machine, we can apply some sequence of transitions to get
+to a new configuration. A record of configurations that we move through between the initial
+state and a final state is called an <em>accepting history</em>.</p>
+
+<p>A Turing Machine accepts an input (computes a result for that input) if and only if an accepting
+history exists. An accepting history is a chain of states, all of which are valid. So given any
+two states in an accepting history, we can find a (composition of) transition(s) which moves
+one to the other.</p>
+
+<p>This structure is monoidal. We have the set \(C\) of configurations for our machine \(M\).
+We can define, for any input \(w \in L(\Sigma)\), the function
+\(T_w : C \to C\). \(T_w(c)\) tells us which state \(c'\) we will end up in if the “input” in memory
+<em>begins with</em> \(w\); if it does not begin with \(w\),
+then the result is whichever state \(M\) uses to reject an input.</p>
+
+<p>The set \(T = \{ T_w \ | \ w \in L(\Sigma) \}\) is the domain of our monoid. The multiplication
+is the composition of these transition operators. The identity transition is \(T_\emptyset\),
+because every input can be seen as <em>beginning with</em> the empty string. Any two of these can be
+composed, and composition is associative, hence we have a monoid.</p>
+
+<p>This is called the <em>transition monoid</em> of a machine. It formalizes the notion that any computation
+can be broken down into steps which are independent of each other, and the results of those steps
+can be combined according to some monoidal structure to produce the result of the program.</p>
+
+<h4 id="why">Why?</h4>
+
+<p>Why is that useful? After all, the construction is, well, rather obtuse. It does tell us exactly
+how to <em>find</em> such a monoid, but that monoid doesn’t exactly lend itself to pretty code. An example
+of the constructed monoid might look like this, in a dialect of C extended with nested functions
+that are safe to return pointers to<sup id="fnref:6" role="doc-noteref"><a href="#fn:6" class="footnote" rel="footnote">5</a></sup>.</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">typedef</span> <span class="kt">void</span><span class="o">*</span><span class="p">(</span><span class="o">*</span><span class="n">step</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="p">)</span> <span class="n">ConstructedMonoid</span><span class="p">;</span>
+
+<span class="kt">void</span> <span class="o">*</span><span class="nf">id_step</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">state</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">return</span> <span class="n">state</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="n">step</span> <span class="o">*</span><span class="nf">times_step</span><span class="p">(</span><span class="n">step</span> <span class="o">*</span><span class="n">step1</span><span class="p">,</span> <span class="n">step</span> <span class="o">*</span><span class="n">step2</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">step</span> <span class="o">*</span><span class="n">new_step</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">state</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">step2</span><span class="p">(</span><span class="n">step1</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+    <span class="p">}</span>
+    <span class="k">return</span> <span class="n">new_step</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="n">step</span> <span class="o">*</span><span class="n">id</span> <span class="o">=</span> <span class="n">id_step</span><span class="p">;</span>
+<span class="n">step</span> <span class="o">*</span><span class="p">(</span><span class="o">*</span><span class="n">times</span><span class="p">)(</span><span class="n">step</span><span class="o">*</span><span class="p">,</span><span class="n">step</span><span class="o">*</span><span class="p">)</span> <span class="o">=</span> <span class="n">times_step</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p>Here the monoid is the set of all functions which take a pointer and return a pointer. The
+pointer is presumed to point to any relevant information that the program needs to continue.
+The identity is the function which returns the state unchanged, and the multiplication composes
+two steps.</p>
+
+<p>Naively, this is stupid. We don’t gain anything by writing our program this way, and really
+it just makes the program more opaque. Chances are we were <em>already</em> breaking the problem down
+into smaller steps in a more readable fashion.</p>
+
+<p>This idea becomes <em>useful</em> when the monoid is isomorphic to a simpler monoid. In that case,
+we can disregard the elements-are-functions notion, and replace the functions with the elements
+of the simpler monoid. Each step of our program becomes as simple as generating the next monoid
+element, with regards to the globally-available input but <em>without</em> caring about the results
+or side effects of other steps. Then we multiply all the resulting monoid elements together
+and the result falls out.</p>
+
+<p>We used this pattern when writing an autograder for a course taught in Haskell, which requires
+some functions to be a written in a certain recursive style. The grader is implemented as a
+a function converts a stack of nested function definitions into a flattened list of bindings
+along with all the other names in scope. This transformation is implemented by (recusively)
+translating each individual definition into an element of a monoid and then multiplying them
+together as we recurse back out. Each element of the flattened list of bindings is then checked
+<em>individually</em> for violations of the desired property and the results are monoidally combined
+into the final result.</p>
+
+<h4 id="ability-to-generalize">Ability to Generalize</h4>
+
+<p>Any monoid corresponding to a turing machine in this way ends up being isomorphic to another
+monoid which is an instance of a special kind of monoid called a <em>monad</em>. Monads are studied
+in category theory, which we’re not going to get into here, but some programming languages
+make them explicitly representable. This makes it possible to express programs by describing
+how to translate inputs into elements of the monoid and combining them together.</p>
+
+<p>A monoid in this way represents the structure of the programming environment. What that means
+is that it represents what side effects can be performed by the functions which return
+elements of the monoid - throwing errors, manipulating a shared state, things like that.</p>
+
+<p>By generalizing such a program from a specific monoid to “any monoid which contains that
+monoid as a substructure,” we can generalize the environments in which a function will work.
+Rather than having a function which works “with my database,” we can have a function which
+works “with <em>some</em> database.” We can then easily test our programs with a mock database,
+while using a real database for our actual business environment. Since it’s the same code
+running in both cases, we can be confident that the tests passing means our logic is sound,
+even though the underlying database is different.</p>
+
+<p>This is related to other programming patterns like dependency injection. There’s a very
+rich space of programming constructs and patterns that can be explored here to find
+ways to write cleaner programs. Haskell has a collection of libraries known as
+<em>algebraic effect libraries</em> which provide implementations of this idea.</p>
+
+<p>We’ll explore this concept further in future posts, I hope, but now back to the math.</p>
+
+<h1 id="groups">Groups</h1>
+
+<p>A group is a monoid with inverses. Alternatively, it is a total groupoid, or an associative
+loop.</p>
+
+<p>A monoid \((D, e, *)\) is a group if for any \(x \in D\), there is an element \(x^{-1} \in D\)
+such that \(x * x^{-1} = e\). We can easily prove that inverses are unique, which is a good
+exercise.</p>
+
+<p>Many, many things that we say in day-to-day mathematics form groups. For example, the monoid
+\((\mathbb Z, 0, +)\) is also a group, because for any \(x \in \mathbb Z\), we have
+\(-x \in \mathbb Z\), and \(x + (-x) = 0\).</p>
+
+<p>However, the monoid \((\mathbb N, 0, +)\) is <em>not</em> a group, because negative numbers aren’t
+in \(\mathbb N\). The monoid \((\mathbb Z, 1, *)\) is also not a group, because for example,
+there’s no inverse of 2. There’s a mechanism by which we could extend this monoid into a group,
+and the result would be \(\mathbb Q\). Perhaps in the future I’ll explore this construction in
+another series of posts, which would probably build up to how we can define \(\mathbb R\)
+<em>algebraicly</em>.<sup id="fnref:7" role="doc-noteref"><a href="#fn:7" class="footnote" rel="footnote">6</a></sup></p>
+
+<p>As discussed in the last post, Rubik’s Cubes are associated with a group where every
+element of the group is a sequence of moves. We can get this group by starting with
+all of the 90 degree clockwise rotations of a single face (there are 6 such moves)
+and then “closing” the set under concatenation: add to the set every move or sequence of moves
+which can be obtained by concatenating two (sequences of) moves in the set. Repeat until
+nothing new gets added.</p>
+
+<p>We can check that inverses exist in this group. Call the clockwise rotation of the front face
+\(F\). We can check that \(F^{-1} = F * F * F\), which we can also write \(F^3\). This means
+that \(F\) can be undone by performing \(F\) three more times; \(F^{-1} * F = F^4 = e\).
+The groupoid properties then tell us that (since products are always defined in a group),
+if we have the sequence of moves \(A * B\), then \((A * B)^{-1}\) is nothing other than
+\(B^{-1} * A^{-1}\). This corresponds to undoing sequence \(AB\) by first undoing \(B\),
+and then undoing \(A\). That’s exactly what we expect!</p>
+
+<p>From here, we could develop a rich theory of groups, called <em>group theory</em>, and apply it
+to the study of a huge variety of real groups that appear in mathematics. Eventually, I’d
+like to develop some of that theory in a sequence of posts, and build up to an understandable
+proof of the fact that quintic polynomials are not solvable in general in terms of addition,
+multiplication, and \(n\)th roots.</p>
+
+<h1 id="one-final-property-getting-to-work">One Final Property: Getting To Work</h1>
+
+<p>One other property that we frequently ask of binary operations is that they <em>commute</em>. That
+is, they satisfy the restriction that \(x * y = y * x\).</p>
+
+<p>If we have a monoid with this property, we call it a <em>commutative monoid</em>. If we have a group
+with this property, we call it an <em>abelian group</em>. Most of the examples we’ve discussed so
+far are commutative, including the boolean monoids, and the additive group. The list monoid
+is <em>not</em> commutative, because order matters in lists. In contrast, the <em>set</em> monoid is commutative,
+because sets are unordered. The transition monoids of state machines are not commutative.</p>
+
+<p>If you have a Rubik’s Cube handy, check that the Rubik’s cube group is not abelian. We could
+loosen our restriction a little bit, and ask the following. Given some group \((G, e, *)\),
+what is the largest subset \(C \subseteq G\) such that for any \(z \in C, g \in G\), we have
+that \(z * g = g * z\)? We say that every element of \(C\) <em>commutes</em> with every element of \(G\).</p>
+
+<p>We can prove that this set \(C\), called the <em>center</em> of \(G\), is itself a group:</p>
+
+<ol>
+  <li>\(C\) has an identity element, because for any \(g \in G\), \(e * g = g * e\), so \(e \in C\).</li>
+  <li>The restriction of \(*\) from \(G\) to \(C\), \(*_C : C \times C \to C\), is total. Consider two elements
+\(y,z \in C\) and some \(g \in G\). Then we have that</li>
+</ol>
+
+\[\begin{aligned}
+(y * z) * g &amp;= y * (z * g) &amp; \text{Associative} \\
+&amp;= y * (g * z) &amp; z \in C \\
+&amp;= (g * z) * y &amp; y \in C \\
+&amp;= g * (z * y) &amp; \text{Associative} \\
+&amp;= g * (y * z) &amp; y,z \in C\\
+\end{aligned}\]
+
+<p>so \(y * z\) is also in \(C\).</p>
+
+<ol>
+  <li>If \(z \in C\), then \(z^{-1} \in C\) as well:</li>
+</ol>
+
+\[\begin{aligned}
+z^{-1} * g &amp;= (z^{-1} * g) * e &amp; \text{Identity} \\
+&amp;= (z^{-1} * g) * (z * z^{-1}) &amp; \text{Product of Inverse} \\
+&amp;= z^{-1} * (g * z) * z^{-1}   &amp; \text{Association} \\
+&amp;= z^{-1} * (z * g) * z^{-1}   &amp; z \in C \\
+&amp;= (z^{-1} * z) * (g * z^{-1}) &amp; \text{Association} \\
+&amp;= e * (g * z^{-1})            &amp; \text{Product of Inverse} \\
+&amp;= g * z^{-1}                  &amp; \text{Identity} \\
+\end{aligned}\]
+
+<p>Since \(C\) is a subset of \(G\), and \((C, e, *)\) is still a group, we call \((C, e, *)\) a
+<em>subgroup</em> of \((G, e, *)\) and we write \(C &lt; G\).</p>
+
+<p>The center of a group is nice because it is the largest subgroup which is abelian. In some
+groups, the center is trivial, meaning it contains only the identity.</p>
+
+<p>I’ll end this post with something that I consider to be a good thought exercise: is the
+center of the Rubik’s Cube group trivial? If not, how big is it?</p>
+
+<p>By developing some group theory, we could fairly easily prove an answer to this question.</p>
+
+<h1 id="conclusion">Conclusion</h1>
+
+<p>In this series of posts, we introduced the general concepts of each of the major <em>single-sorted,
+binary-operator</em> algebraic structures.  We saw how they arise from adding increasingly stringent
+constraints to the binary operator, and attached some examples to each of the weird names.</p>
+
+<p>I hope that abstract algebra feels approachable from here. We can use it to achieve general
+results which we can then apply to specific scenarios to get results for free. A further treatment
+of abstract algebra would explore some more important structures, notably <em>rings</em>, <em>fields</em>,
+and <em>vector fields</em>. These structures are nothing more than adding some new requirements to our
+set.</p>
+
+<p>We can improve programs, by implementing the results as very general functions and then
+applying the general functions to specific scenarios, achieving great degrees of code re-use
+and understandability. Simply by seeing a reference to a common general function, we can
+immediately understand the broad strokes of what the function is doing, even if we don’t yet
+understand all the specifics of the structure we’re applying it on.</p>
+
+<p>Most likely, my next posts will be about computer hardware, specifically superscalar out-of-order
+processing and how we can use the visual digital logic simulator <a href="https://www.google.com/url?sa=t&amp;rct=j&amp;q=&amp;esrc=s&amp;source=web&amp;cd=&amp;cad=rja&amp;uact=8&amp;ved=2ahUKEwj_4eXQuoP5AhVohIkEHeC1DwEQFnoECBMQAQ&amp;url=https%3A%2F%2Fstore.steampowered.com%2Fapp%2F1444480%2FTuring_Complete%2F&amp;usg=AOvVaw3zW9DEhcM5CdezAukGNxTo">Turing Complete</a>
+to explore the different components of such systems and how they work together.</p>
+
+<p>Further down the line, future posts will explore some more group theory, and some more direct
+application of abstract algebra to programming in Haskell. I want to explore so-called
+<em>free structures</em>, and how we can use them to describe computations that build other
+computations, a technique called <em>higher-order programming</em>. We’ve seen some free structures
+in these posts already, though I didn’t explicitly call them out<sup id="fnref:8" role="doc-noteref"><a href="#fn:8" class="footnote" rel="footnote">7</a></sup>. I also alluded to higher-order
+programming via <em>effects</em> earlier in this post, but there are other neat things we can do
+with the technique that don’t seem to get much exposure.</p>
+
+<hr />
+
+<div class="footnotes" role="doc-endnotes">
+  <ol>
+    <li id="fn:1" role="doc-endnote">
+      <p>Remember from the last post, we proved that identites are unique in unital magma.
+  Since monoids <em>are</em> unital magma, identities are unique in monoids too. So 
+  <strong>without checking this fact</strong>, we immediately know that \(true\) is <em>the only</em>
+  identity. For the remainder of the post, I’ll say “the identity” of a monoid, instead
+  of “an identity.” <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:2" role="doc-endnote">
+      <p>In the original post in this overview series, I mentioned that distinguished elements
+  of structures are always called points, and structures that have any are called “pointed.” <a href="#fnref:2" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:3" role="doc-endnote">
+      <p>As discussed in <a href="/math/algebra/2022/07/17/basic-structures.html#sets-setting-the-stage">Setting the Stage</a> <a href="#fnref:3" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:4" role="doc-endnote">
+      <p>We’ll see in a moment that it always is. <a href="#fnref:4" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:6" role="doc-endnote">
+      <p>C++ has such a construct, but I very strongly dislike C++, so this is what we get.
+  In a later post, we will review these concepts through the lens of Haskell, where this
+  structure will turn out to be… quite familiar. <a href="#fnref:6" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:7" role="doc-endnote">
+      <p>That is, in terms of the properties that the set should have. What might those
+  properties even be, and how can we construct a set that has those properties if it is necessarily
+  uncoutably infinite? <a href="#fnref:7" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:8" role="doc-endnote">
+      <p>Specifically, our example of magma was the free magma on binary tree nodes, linked lists
+  (the semigroups that we got by making the magma associative) are the free semigroups on
+  linked list nodes, and general lists containing things of type \(T\) are the free monoids
+  on \(T\).</p>
+
+      <p>In a deep sense, the composition of functions that we saw when expressing programs as
+  monoids described how to take a list of steps to perform and flatten it into a single
+  long step that composes all the elements of the list. By generalizing over more interesting
+  composition operators (which tend to arise from the “more interesting” monoids that
+  we may be lucky enough to be isomorphic to), we can again arrive at a free monoid, this time
+  over programs themselves. These free monoids are called <em>free monads</em> and form the basis
+  for programming via effects. <a href="#fnref:8" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+  </ol>
+</div>]]></content><author><name></name></author><category term="math" /><category term="algebra" /><summary type="html"><![CDATA[In the last post, we explored unital magma, quasigroups, loops, and groupoids. Each structure arose by adding more restrictions to the binary operation of the structure.]]></summary></entry><entry><title type="html">More Basic Algebraic Structures</title><link href="https://maxkopinsky.com/math/algebra/2022/07/18/more-basics.html" rel="alternate" type="text/html" title="More Basic Algebraic Structures" /><published>2022-07-18T05:30:00+00:00</published><updated>2022-07-18T05:30:00+00:00</updated><id>https://maxkopinsky.com/math/algebra/2022/07/18/more-basics</id><content type="html" xml:base="https://maxkopinsky.com/math/algebra/2022/07/18/more-basics.html"><![CDATA[<p>In <a href="/math/algebra/2022/07/17/basic-structures.html">the last post</a>, we saw how we
+can view the hierarchy of algebraic structures as a system of adding requirements
+to the binary operator of each structure.</p>
+
+<p><img src="/assets/abstract-algebra/hierarchy.svg" /></p>
+
+<p>In this post we’ll wrap up our exploration of the bottom half with unital magma
+and quasigroups. Then we’ll talk about loops and groupoids. Groupoids are where
+we really start getting enough interesting structure to make interesting statements
+about all groupoids at once.</p>
+
+<ul id="markdown-toc">
+  <li><a href="#unital-magma-one-single-lava-please" id="markdown-toc-unital-magma-one-single-lava-please">Unital Magma: One Single Lava, Please</a>    <ul>
+      <li><a href="#identity-elements-are-unique" id="markdown-toc-identity-elements-are-unique">Identity Elements Are Unique!</a></li>
+    </ul>
+  </li>
+  <li><a href="#quasigroups-latin-squares" id="markdown-toc-quasigroups-latin-squares">Quasigroups: Latin Squares</a></li>
+  <li><a href="#loops-a-quick-detour" id="markdown-toc-loops-a-quick-detour">Loops: A Quick Detour</a></li>
+  <li><a href="#groupoids-invertible-categories" id="markdown-toc-groupoids-invertible-categories">Groupoids: Invertible Categories</a>    <ul>
+      <li><a href="#proof-of-inverse-inverses" id="markdown-toc-proof-of-inverse-inverses">Proof Of Inverse-Inverses</a></li>
+      <li><a href="#proof-of-inverse-of-product" id="markdown-toc-proof-of-inverse-of-product">Proof of Inverse-of-Product</a></li>
+      <li><a href="#the-category-model" id="markdown-toc-the-category-model">The Category Model</a></li>
+      <li><a href="#a-more-interesting-example" id="markdown-toc-a-more-interesting-example">A More Interesting Example</a></li>
+    </ul>
+  </li>
+  <li><a href="#groupoid-tangent-torsors" id="markdown-toc-groupoid-tangent-torsors">Groupoid Tangent: Torsors</a></li>
+  <li><a href="#next-time-monoids" id="markdown-toc-next-time-monoids">Next Time: Monoids</a></li>
+</ul>
+
+<h1 id="unital-magma-one-single-lava-please">Unital Magma: One Single Lava, Please</h1>
+
+<p>The possible properties we’ve put on the operator so far include totality,
+association, and identities<sup id="fnref:1" role="doc-noteref"><a href="#fn:1" class="footnote" rel="footnote">1</a></sup>. We got semigroups by starting from magma and
+requiring the operation to be associative. What if instead, we require the
+operation to have identities?</p>
+
+<p>Specifically, the property we’re going to add is slightly different than what we
+had before. Before we assumed that there was an identity for <em>each</em> arrow in
+a category, and that the left and right identities could be different. However,
+this was only really necessary because categories did not require the operation to
+be total.</p>
+
+<p>The reason this is undesirable is because that if I give you an element of the set
+\(S\) and ask you for the (left or right) identity element, you can’t easily give
+it to me. You’d have to find the correct identity <em>for that element</em>, and this could
+be quite difficult. So we’re going to add a stronger requirement instead, which
+makes it easy to find the correct identity.</p>
+
+\[\text{The Identity Axiom} \\ \text{There is an } e \text{ such that for all } x, e \cdot x = x \cdot e = x\]
+
+<p>Now it’s easy to find the correct identity, because it’s always the same.</p>
+
+<p>We do have to be careful though. The axiom doesn’t say that there is <em>only one</em> \(e \in S\)
+with this property, just that there is <em>at least</em> one. We cannot (naively) assume
+that the identity is unique - we’ll come back to this in a moment.</p>
+
+<p>Recall that we defined \(\cdot(A, B)\) for our model of magma to be the operation
+that makes a new tree node whose children are \(A\) and \(B\). The carrier set
+for this model is the set of (rooted) binary trees. But I implicitly disregarded
+the existence of <em>empty</em> trees - we assumed that every tree in the set has at
+least one node. This was effectively required because every node needs to have either
+zero or two children; \(\emptyset \cdot A\) would only have one child which is not
+allowed.</p>
+
+<p>But we can still give a definition for \(\emptyset \cdot A\) - it can just be \(A\)
+again! By definition, \(\emptyset\) (the empty tree) would be our left identity.</p>
+
+<p>We can similarly define \(A \cdot \emptyset = A\), and now it’s also the right identity<sup id="fnref:2" role="doc-noteref"><a href="#fn:2" class="footnote" rel="footnote">2</a></sup>.</p>
+
+<p>This lets \(\emptyset\) satisfy our definition of the identity element.</p>
+
+<p>Now recall that we got here by adding \(\emptyset\) to our carrier set. It wasn’t there
+before, but we’ve added it in and defined \(\cdot\) for it. What’s stopping us from
+also adding a new element, 🙂, and defining it to <em>also</em> be an identity?</p>
+
+<p>Seemingly, the answer is nothing. And this takes us to our first highly-general application
+of the ideas of abstract algebra.</p>
+
+<h3 id="identity-elements-are-unique">Identity Elements Are Unique!</h3>
+
+<p>Let’s suppose that we have a unital magma with two <em>distinct</em> elements \(e_1, e_2\) which
+both satisfy the identity law. What happens if we try and compute \(e_1 \cdot e_2\)?</p>
+
+\[\begin{aligned}
+e_1 &amp;= e_1 \cdot e_2 \\
+&amp;= e_2
+\end{aligned}\]
+
+<p>We can prove that \(e_1 = e_2\)! This happens because both identities are <em>both</em> left and
+right identities.</p>
+
+<p>The amazing thing is that this proof only uses the identity law. Whenever we have a
+structure with this identity law, we get <em>for free</em> that the identities are unique!</p>
+
+<p>This applies to anything that is a unital magma - unital magmas, but also monoids, loops,
+groups, and more.</p>
+
+<p>Therefore, from now on, we will say <em>the</em> identity instead of <em>an</em> identity.</p>
+
+<h1 id="quasigroups-latin-squares">Quasigroups: Latin Squares</h1>
+
+<p>Latin Squares are a generalization of Sudoku puzzles. We have an \(n \times n\) grid,
+and \(n\) distinct symbols. We place each element in the grid such that each one appears
+exactly once in every row an column. Here’s an example one with 4 elements - we say it
+has <em>order</em> 4.</p>
+
+\[\begin{array}{|c|c|c|c|}
+\hline
+b &amp; d &amp; c &amp; a \\
+\hline
+a &amp; c &amp; d &amp; b \\
+\hline
+c &amp; b &amp; a &amp; d \\
+\hline
+d &amp; a &amp; b &amp; c \\
+\hline
+\end{array}\]
+
+<p>It’s not very hard to check that this is indeed a latin square. Take a few moments
+and check!</p>
+
+<p>What’s interesting, though, is that this looks suspiciously like a multiplication
+table. All we have to do is label the rows and columns with the operands and then
+declare that \(x \cdot y\) is the value in the row labeled \(x\) and column labeled \(y\).</p>
+
+\[\begin{array}{c||c|c|c|c|}
+  &amp; a &amp; b &amp; c &amp; d \\
+\hline\hline
+a &amp; b &amp; d &amp; c &amp; a \\
+\hline
+b &amp; a &amp; c &amp; d &amp; b \\
+\hline
+c &amp; c &amp; b &amp; a &amp; d \\
+\hline
+d &amp; d &amp; a &amp; b &amp; c \\
+\hline
+\end{array}\]
+
+<p>We could describe any magma in this form, but our running example so far has used the domain
+of binary trees, which is an infinite domain. Putting that in table form would be pretty tricky!
+However the magma described by this table is finite. The carrier set is just \(D = \{1,2,3,4\}\).</p>
+
+<p>\(D\), along with the multiplication table to define \(\cdot(-,-)\)<sup id="fnref:3" role="doc-noteref"><a href="#fn:3" class="footnote" rel="footnote">3</a></sup>, form a magma.
+Since the operation is
+defined by a multiplication table, we could instead call the operation multiplication. Let’s do
+that. While we’re at it, we might as well use the multiplication symbol \(*\).</p>
+
+<p>For example, we have \(a * b = d\). This pair of \((D, *)\) gives us a “finite magma.”</p>
+
+<p>Take a moment and check: is this magma unital? Answer<sup id="fnref:4" role="doc-noteref"><a href="#fn:4" class="footnote" rel="footnote">4</a></sup></p>
+
+<p>We should also check if this magma is <em>associative</em>, which would make it a semigroup. Randomly
+picking elements \(a, b, d\), we can check:</p>
+
+\[\begin{aligned}
+(a * b) * d &amp;= d * d \\
+            &amp;= c \\
+\\
+a * (b * d) &amp;= a * b \\
+            &amp;= d \\
+\end{aligned}\]
+
+<p>It’s not associative!</p>
+
+<p>However, the fact that the multiplication table is a latin square gives us an interesting
+property. The multiplication is <em>invertible</em>. That is, we have the following property.</p>
+
+\[\text{The Divisibility Axiom} \\ 
+\text{For any } a,b \in D, \text{ there are unique } x,y \in D \text{ such that} \\
+a * x = b \\
+y * a = b\]
+
+<p>We write that \(x = a \backslash b\) and \(y = b / a\). I read these as “x is a under b” and
+“y is b over a.” Respectively, we call these operations “left division” and “right division.”</p>
+
+<p>If a magma has the divisibility property, we could call the magma <em>divisible</em>. But more commonly,
+we call these structures <em>quasigroups</em>.</p>
+
+<p>We can check, from the definitions, that all of the following properties hold:</p>
+
+\[\begin{aligned}
+y &amp;= x * (x \backslash y) \\
+y &amp;= x \backslash (x * y) \\
+y &amp;= (y / x) * x          \\
+y &amp;= (y * x) / x          \\
+\end{aligned}\]
+
+<p>These identities say that multiplication and division on the same side, by the same element, in
+either order, have no effect. We’d expect that of operations called “multiplication” and
+“division,” and we get these identities <em>for free</em> from the definitions even though we didn’t
+require them explicitly!</p>
+
+<p>These properties will hold in any quasigroup. Checking the diagram, groups are (unsurprisingly)
+quasigroups, and groups are very prevalent. These properties will also hold in groups.</p>
+
+<p>The most common quasigroups are numbers with subtraction, for example \((\mathbb Z, -)\) or
+\((\mathbb R, -)\). Subtraction is total, and invertible on either side. We don’t typically
+think of subtraction as “multiplication,” but it fits the definition. And indeed, the above
+properties hold in these quasigroups.</p>
+
+<h1 id="loops-a-quick-detour">Loops: A Quick Detour</h1>
+
+<p>If we add the identity axiom to our requirements for a quasigroup, we get a structure called
+a <em>loop</em>. One example of a loop (which is not also associative) is described by the following table.</p>
+
+\[\begin{array}{c|c|c|c|c}
+1 &amp; 2 &amp; 3 &amp; 4 &amp; 5 \\
+\hline
+2 &amp; 4 &amp; 1 &amp; 5 &amp; 3 \\
+\hline
+3 &amp; 5 &amp; 4 &amp; 2 &amp; 1 \\
+\hline
+4 &amp; 1 &amp; 5 &amp; 3 &amp; 2 \\
+\hline
+5 &amp; 3 &amp; 2 &amp; 1 &amp; 4 \\
+\end{array}\]
+
+<p>There are some more subclassifications of loops, but I’m not going to get into them here. I just
+wanted to mention that this structure has a name, and it’s going to be one of the possible
+stepping stones to groups.</p>
+
+<h1 id="groupoids-invertible-categories">Groupoids: Invertible Categories</h1>
+
+<p>Continuing our exploration of inverses, what happens if we add inverses to a category? That is,
+for every arrow \(A \to B\) in a category, we’ll add the arrow \(B \to A\) if it doesn’t already
+exist.</p>
+
+<p>The exact properties we’ll add (which agree with our notion of division from quasigroups) are</p>
+
+<ol>
+  <li>For every element \(a \in D\), there exists an element \(a^{-1} \in D\).</li>
+  <li>\(a^{-1} \cdot a\) and \(a \cdot a^{-1}\) are defined (but not necessarily equal).</li>
+  <li>If \(a * b\) is defined, then \(a * b * b^{-1} = a\) and \(a^{-1} * a * b = b\).</li>
+</ol>
+
+<p>The third property is a version of the identity property that works despite the fact that
+groupoids don’t actually have to have identities. It says that whatever the result of
+\(a * a^{-1}\) is, it is an identity for any values with which multiplication <em>is</em> defined.
+However, not every element necessarily has multiplication defined with an identity!</p>
+
+<p>In every groupoid, we can prove the following useful theorems:</p>
+
+<ol>
+  <li>For any \(a\), \((a^{-1})^{-1} = a\)</li>
+  <li>If \(a * b\) exists, then \((a * b)^{-1} = b^{-1} * a^{-1}\).</li>
+</ol>
+
+<p>The proofs require some strong symbolic manipulation. This is pretty common in abstract
+algebra (hence the “abstract”) but the exchange is that the results are very general and
+powerful. Let’s get in the practice.</p>
+
+<h3 id="proof-of-inverse-inverses">Proof Of Inverse-Inverses</h3>
+
+\[\begin{aligned}
+a * a^{-1} &amp;= a * a^{-1} &amp; \text{Equality is reflexive} \\ 
+(a * a^{-1}) * (a^{-1})^{-1} &amp;= (a * a^{-1}) * (a^{-1})^{-1} &amp; \text{Right-multiply by } (a^{-1})^{-1} \\
+(a^{-1})^{-1} &amp;= (a * a^{-1}) * (a^{-1})^{-1} &amp; \text{New Axiom 3} \\
+(a^{-1})^{-1} &amp;= a * (a^{-1} * (a^{-1})^{-1}) &amp; \text{* is associative} \\
+(a^{-1})^{-1} &amp;= a &amp; \text{New Axiom 3} \\
+\end{aligned}\]
+
+<p>The right multiplication is justified because associativity and axiom 2 tell us that the
+relevant product is defined.</p>
+
+<h3 id="proof-of-inverse-of-product">Proof of Inverse-of-Product</h3>
+
+<p>This proof looks very similar to the last one. We start with the only relevant equality that
+we know, and then we rearrange things in the only two ways possible and the equality we want
+just falls out.</p>
+
+<p>Given that \(a * b\) exists, we know that \((a * b)^{-1}\) exists. Let’s call it \(e\).
+Similarly to the last proof, we can justify that \(a * b * b^{-1} * a^{-1}\) exists.</p>
+
+\[\begin{aligned}
+e &amp;= (a * b)^{-1} &amp; \text{Definition of } e \\
+e * (a * b) * (b^{-1} * a^{-1}) &amp;= (a * b)^{-1} * (a * b) * (b^{-1} * a^{-1}) &amp; \\
+e * (a * b) * (b^{-1} * a^{-1}) &amp;= (a * b)^{-1} * (a * (b * b^{-1})) * a^{-1} &amp; \text{Associativity} \\
+e * (a * b) * (b^{-1} * a^{-1}) &amp;= (a * b)^{-1} * a * a^{-1} &amp; \text{Axiom 3} \\
+e * (a * b) * (b^{-1} * a^{-1}) &amp;= (a * b)^{-1} &amp; \text{Axiom 3} \\
+(a * b)^{-1} * (a * b) * (b^{-1} * a^{-1}) &amp;= (a * b)^{-1} &amp; \text{Definition of } e \\
+(b^{-1} * a^{-1}) &amp;= (a * b)^{-1} &amp; \text{Axiom 3} \\
+\end{aligned}\]
+
+<p>Both of these properties are easier to prove on proper groups, but it’s interesting that we
+don’t actually need the existence of an identity to prove them.</p>
+
+<h3 id="the-category-model">The Category Model</h3>
+
+<p>Returning to our category model, a groupoid is a category with inverses. Using our function
+example, each node of the graph is a set. Each arrow \(A \to B\) is a function from \(A\) to \(B\).
+For simplicity, we’re only going to pick <em>one</em> function for each arrow.</p>
+
+<p>If we have an arrow \(f : A \to B\), we also have an arrow \(g : B \to A\). For each pair, we
+know that both products \(f * g\) and \(g * f\) are defined. This is our Axiom 2 of inverses
+above, and we can easily check that the model meets it: \((A \to B) * (B \to A) = (A \to A)\)
+and vice versa.</p>
+
+<p>We can also check the properties that we proved in the last couple sections, but I’ll leave
+that as an exercise.</p>
+
+<h3 id="a-more-interesting-example">A More Interesting Example</h3>
+
+<p>You may have heard people say that group theory can be applied to study Rubik’s Cubes. This is
+true, and part of the reason is that any two moves on a Rubik’s Cube can be composed. Each move
+is an element of the “Rubik’s Cube Group,” and products in a group always exist. Of course,
+this group is also a groupoid.</p>
+
+<p>But we could find a different puzzle where we can’t always compose any moves, for example,
+<a href="https://en.wikipedia.org/wiki/15_puzzle">fifteen puzzles</a>. Fifteen puzzles are commonly
+studied as groups, but they can be more naturally represented by the groupoid of sequences of
+moves. The product of two sequences means doing one and then the other (and since this is only
+possible if the hole is in the correct place in the intermediate configuration, the product
+does not always exist).</p>
+
+<p>We’ll still have all of the properties that we’ve shown hold for general groupoids. We have
+partial identities (do nothing, with the hole in a particular place), inverses,
+and composition associates. We could then apply
+<em>groupoid</em> theory to the fifteen puzzle to discover various properties of the
+“15 puzzle groupoid” and learn things about the nature of the puzzle.</p>
+
+<p>One common fact about 15 puzzles is that exactly half of the possible configurations are
+solvable. Any solvable configuration can be transformed to the solved configuration by
+applying some element of the 15-puzzle groupoid<sup id="fnref:5" role="doc-noteref"><a href="#fn:5" class="footnote" rel="footnote">5</a></sup> (a sequence of moves). It’s easy to
+prove, using the groupoid axioms, that any two solvable configurations can be transformed
+into each other (exercise). If we went and developed some groupoid theory, we could show
+that these facts <em>imply</em> that any two <em>unsolvable</em> configurations can also be transformed
+into each other, which is much less obvious.<sup id="fnref:6" role="doc-noteref"><a href="#fn:6" class="footnote" rel="footnote">6</a></sup></p>
+
+<p>The development of such a theory may be the topic of future posts, but
+this hopefully teases some of the power of abstract algebra. We get general results
+which we can then apply to learn specific things about specific models.</p>
+
+<h1 id="groupoid-tangent-torsors">Groupoid Tangent: Torsors</h1>
+
+<p>An extremely common structure in the real world is a <em>torsor</em>. Torsors are sets,
+equiped with an invertible binary operation (often written \(+\)), but without
+a notion of “zero.” This corresponds to the notion of a groupoid, although if
+we make it more precise we’ll see that I’m waving my hands fairly vigorously
+at the moment.<sup id="fnref:7" role="doc-noteref"><a href="#fn:7" class="footnote" rel="footnote">7</a></sup></p>
+
+<p>But these posts are about conceptually understanding structures, so, I’ll keep
+waving my hands for the moment.</p>
+
+<p>Consider musical notes. We have notes like A, A#, D, Fb, etc. There’s a notion
+of a “next note,” and of a “previous note,” <code class="language-plaintext highlighter-rouge">next(A) = A#</code>, <code class="language-plaintext highlighter-rouge">prev(A) = Ab</code>. These
+operations are inverses. If we see the notes as the nodes of a graph, then the
+<code class="language-plaintext highlighter-rouge">next</code> and <code class="language-plaintext highlighter-rouge">prev</code> functions are arrows between the nodes, and we have a groupoid.</p>
+
+<p>Using these functions, we can measure <em>distances</em> between notes. It takes 4 steps
+of the <code class="language-plaintext highlighter-rouge">next</code> function to get from A to C#. We can say that the distance between
+these notes is 4. By measuring distances, we can recover something that looks
+a lot like addition. However, we don’t have values that we can assign to notes themselves,
+other than arbitrary names, and we don’t have a notion of a “zero” note. So we
+can add a note to a <em>distance</em>, for example <code class="language-plaintext highlighter-rouge">B + (C# - A) = D#</code> (why?), but we can’t
+add notes to other notes.</p>
+
+<p>Torsors are pretty common in the real world. In physics, energy is a torsor. There’s
+no notion of “zero” energy. If we examine the same scenario in two different reference
+frames, we will almost certainly measure different amounts of energy for every object
+involved. Which measurement of “zero” is the right one? Neither! They are both
+equally meaningless. Yet both analyses will come to exactly the same conclusions, because
+they will measure the same <em>differences</em> in energy, and this is what matters.</p>
+
+<p>Sometimes we think something is a torsor and later find out that there is a true zero.
+Temperatures are a good example. Temperatures were thought to be a torsor until
+absolute zero was discovered. Absolute zero is the true zero of temperatures. No matter
+what scale we use to measure temperatures (analogous to a reference frame), we will
+always agree on the meaning of absolute zero.</p>
+
+<h1 id="next-time-monoids">Next Time: Monoids</h1>
+
+<p>This concludes the introduction to the basic algebraic structures, and motivating some
+of the things that they gives us the language to talk about. In the next post, we will
+talk about <em>monoids</em>, which are by far the most prevalent mathematical structure in programs
+that you’ve never heard of<sup id="fnref:8" role="doc-noteref"><a href="#fn:8" class="footnote" rel="footnote">8</a></sup>. We’ll also talk about groups, which are a prevalent
+<em>mathematical</em> structure.</p>
+
+<hr />
+
+<div class="footnotes" role="doc-endnotes">
+  <ol>
+    <li id="fn:1" role="doc-endnote">
+      <p>Recall from the previous post’s section on categories, we say “the identity
+  law” to mean the existence of <em>both</em> left and right identities. <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:2" role="doc-endnote">
+      <p>The identity laws for a small category require that an identity exists <em>for each</em>
+  element of the carrier set. They <em>do not</em> require that the identities be unique
+  or the same for every element. <a href="#fnref:2" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:3" role="doc-endnote">
+      <p>This notation means “the operation \(\cdot\) which takes two unspecified arguments.”
+  I noticed that plain \(\cdot\) is a bit awkward to read on the rendered page, so
+  I’ll use this from now on when referring to an operation that we don’t have a better
+  name for. <a href="#fnref:3" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:4" role="doc-endnote">
+      <p>No, it is not. There’s no left <em>or</em> right identity, let alone something which is both. <a href="#fnref:4" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:5" role="doc-endnote">
+      <p>I didn’t define what it means to apply a sequence of moves to the puzzle, but
+  intuitively we know what it means. However it’s worth noticing that this is
+  itself a binary operation. Rather than being from \(D \times D \to D\), though,
+  it is from \(F \times D \to F\), where \(F\) is the set of 15-puzzle configurations.
+  Such operations are called <em>groupoid actions</em>. These are closely related to
+  <em>group actions</em>, and many of the same results apply to both. <a href="#fnref:5" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:6" role="doc-endnote">
+      <p>Group theorists will recognize this as the statement that the groupoid action which
+  applies a sequence of moves to a configuration has two orbits, with equal cardinality. <a href="#fnref:6" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:7" role="doc-endnote">
+      <p>Torsors are usually analyzed as a <em>group</em> acting on a different set \(X\). Using the
+  group action and the group multiplication (which <em>does</em> have an identity), we can
+  obtain a subtraction operation on \(X\) which measures distances as elements of the
+  group. The 0 distance corresponds to the identity of the group.
+  Yet the set \(X\) does not have a designated zero. If we pick an arbitrary element of
+  \(X\) and declare it to be zero, we recover the group itself, and this is called
+  “trivializing” the torsor. But seeing things as a torsor is useful when we want to
+  work directly and only on the distances between things, and I find this conceptually
+  close to groupoids. Your mileage may vary with this one. <a href="#fnref:7" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:8" role="doc-endnote">
+      <p>Unless you enjoy programming in Haskell, in which case you probably recognize that
+  just about everything in programs is a monoid 🙂 <a href="#fnref:8" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+  </ol>
+</div>]]></content><author><name></name></author><category term="math" /><category term="algebra" /><summary type="html"><![CDATA[In the last post, we saw how we can view the hierarchy of algebraic structures as a system of adding requirements to the binary operator of each structure.]]></summary></entry><entry><title type="html">Conceptual Overview of Basic Algebraic Structures</title><link href="https://maxkopinsky.com/math/algebra/2022/07/17/basic-structures.html" rel="alternate" type="text/html" title="Conceptual Overview of Basic Algebraic Structures" /><published>2022-07-17T04:00:00+00:00</published><updated>2022-07-17T04:00:00+00:00</updated><id>https://maxkopinsky.com/math/algebra/2022/07/17/basic-structures</id><content type="html" xml:base="https://maxkopinsky.com/math/algebra/2022/07/17/basic-structures.html"><![CDATA[<p>If you haven’t seen the previous post in this series, and want
+an introduction to abstract algebra before getting into specific structures,
+you should check out <a href="/math/algebra/2022/07/16/what-is-abstract-algebra.html">What is Abstract Algebra, Anyway?</a>.</p>
+
+<p>As a reminder, we’ll be starting to explore the various single-domain, single binary operator
+algebraic structures in the following hierarchy.</p>
+
+<p><img src="/assets/abstract-algebra/hierarchy.svg" /></p>
+
+<p>We’ll start at the bottom and work our way up, talking about each arrow individually.
+Let’s build some intuition!</p>
+
+<ul id="markdown-toc">
+  <li><a href="#sets-setting-the-stage" id="markdown-toc-sets-setting-the-stage">Sets: Setting the Stage</a></li>
+  <li><a href="#magmas-both-lava-and-trees" id="markdown-toc-magmas-both-lava-and-trees">Magmas: Both Lava and Trees</a></li>
+  <li><a href="#semigroupoids-honestly-these-never-come-up" id="markdown-toc-semigroupoids-honestly-these-never-come-up">Semigroupoids: Honestly, These Never Come Up</a></li>
+  <li><a href="#small-categories-it-begins" id="markdown-toc-small-categories-it-begins">Small Categories: It Begins</a></li>
+  <li><a href="#semigroups-from-semigroupoids-the-graph-collapses" id="markdown-toc-semigroups-from-semigroupoids-the-graph-collapses">Semigroups (from Semigroupoids): The Graph Collapses</a></li>
+  <li><a href="#semigroups-from-magmas-just-change-equality" id="markdown-toc-semigroups-from-magmas-just-change-equality">Semigroups (from Magmas): Just Change Equality</a></li>
+  <li><a href="#more-to-come" id="markdown-toc-more-to-come">More To Come</a></li>
+</ul>
+
+<h2 id="sets-setting-the-stage">Sets: Setting the Stage</h2>
+
+<p>Experienced mathematicians should feel comfortable skipping this section. I will introduce some
+basic concepts and notation, then move on.</p>
+
+<p>As mentioned in the last post, before we can have structure, we need to have things to put structure on.
+This is the <em>domain</em> of the structure, and it will almost always be a set of some kind.</p>
+
+<p>Sets aren’t themselves very interesting. They are collections of things. They can be any things.
+Even other sets! We write sets as a list of things inside curly braces, for example \(\{1, 2, 3\}\).
+Even though we write them as a list, keep in mind that sets have no structure at all. \(\{3, 2, 1\}\)
+is the same set, because the order doesn’t matter (order would be structure). All that matters is that
+the elements are the same.</p>
+
+<p>However within a set, the elements do not have to look like each other. For example, we can easily
+write \(\{1, cat, \text{:)}\}\). I’m not sure how this set is useful, but it is a set.</p>
+
+<p>There are several well-known sets with special names. For example, the natural numbers are written
+\(\mathbb N\). Here’s a quick list of some common sets of numbers.</p>
+
+<ul>
+  <li>\(\mathbb N\) - the natural numbers</li>
+  <li>\(\mathbb Z\) - the integers</li>
+  <li>\(\mathbb Q\) - the rational numbers</li>
+  <li>\(\mathbb R\) - the real numbers</li>
+  <li>\(\mathbb C\) - the complex numbers</li>
+</ul>
+
+<p>If we want to say that some thing \(x\) belongs to a set \(S\), we write \(x \in S\). When we have
+a set containing things that are alike, we can call the set a “type” and say that its elements
+“are that type.” For example, there is a type of natural numbers, and 0 is a natural number.
+When viewing a set this way, we would instead write \(x : S\).</p>
+
+<p>There’s also a set usually written <strong>1</strong>, which is the set containing a single element. It doesn’t
+really matter what that element is, because you can easily view any set with only one element
+through the lens of any other set with only one element.</p>
+
+<p>Wait. What does that mean?</p>
+
+<p>In the last post we discussed how we can view natural numbers and stacks of pennies as being
+“the same thing.” We did that by describing how we could view both of them as modeling the same
+set of properties. Here, what we’re trying to say is that if you have a set with one element, say
+\(\{1\}\), then anything you say about that set will immediately apply to another set, say \(\{\text{dog}\}\),
+which also only has one element. We make it apply by replacing any reference to \(1\) with a reference
+to “dog.”</p>
+
+<p>What that describes is a way to <em>translate</em> from \(\{1\}\) to \(\{\text{dog}\}\). This is a function!
+If we call the function \(\tt{translate}\), then we can define it as \(\tt{translate}(1) = \text{dog}\).
+We would say that the <em>type</em> of this function is from \(\{1\}\) to \(\{\text{dog}\}\). The notation
+for this is simply \(\tt{translate} : \{1\} \to \{\text{dog}\}\).</p>
+
+<p>We can also go the other way, using \(\tt{translate'} : \{\text{dog}\} \to \{1\}\), in the obvious
+way. Since we can go in both directions without losing or gaining any information, then conceptually,
+both sets must contain exactly the same information to begin with!</p>
+
+<p>This concept of “containing the same information” is at the core of what we can do with abstract
+algebra. We can prove properties about some model by showing that it contains the same information
+as some other model where those properties are easier to prove - and proving the properties on that
+model instead.<sup id="fnref:1" role="doc-noteref"><a href="#fn:1" class="footnote" rel="footnote">1</a></sup></p>
+
+<p>That’s a bit of an abstract concept, so let’s work an example.</p>
+
+<p>Let’s suppose we have a computer program which reads a simple expression, like “1 + 1,” as a string,
+and evaluates it. We’ll let the expressions contain a pair of natural numbers and either “+” or “*”.</p>
+
+<p>It’s pretty hard to do any meaningful work on a string. Turning “1 + 1” into “2” is not so simple!</p>
+
+<p>However most programming languages provide functions like <code class="language-plaintext highlighter-rouge">parseInt : String -&gt; int</code> and
+<code class="language-plaintext highlighter-rouge">toString : int -&gt; String</code>. If we restrict ourselves to strings that actually contain integers,
+then this pair of functions “witnesses” that those strings and the set of integers contain the
+same information, just like <code class="language-plaintext highlighter-rouge">translate</code> and <code class="language-plaintext highlighter-rouge">translate'</code> <em>witnessed</em> that \(\{1\}\) and
+\(\{\text{dog}\}\) do.</p>
+
+<p>So lets use these functions to translate our strings into a domain we can work on more easily:</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">Op</span><span class="p">(</span><span class="n">Enum</span><span class="p">):</span>
+    <span class="n">Add</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">Times</span> <span class="o">=</span> <span class="mi">2</span>
+
+<span class="k">def</span> <span class="nf">parseExp</span><span class="p">(</span><span class="nb">input</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Op</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+    <span class="n">left</span><span class="p">,</span> <span class="n">opstr</span><span class="p">,</span> <span class="n">right</span> <span class="o">=</span> <span class="nb">input</span><span class="p">.</span><span class="n">split</span><span class="p">()</span>
+    <span class="n">op</span> <span class="o">=</span> <span class="n">Add</span> <span class="k">if</span> <span class="n">opstr</span> <span class="o">==</span> <span class="s">"+"</span> <span class="k">else</span> <span class="n">Times</span> <span class="c1"># for simplicity
+</span>    <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">left</span><span class="p">),</span> <span class="n">op</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">right</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">toString</span><span class="p">(</span><span class="n">result</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Op</span><span class="p">,</span> <span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">return</span> <span class="p">[</span> <span class="nb">str</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+           <span class="p">,</span> <span class="s">"+"</span> <span class="k">if</span> <span class="n">result</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="n">Add</span> <span class="k">else</span> <span class="s">"*"</span>
+           <span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+           <span class="p">].</span><span class="n">join</span><span class="p">(</span><span class="s">' '</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>These two functions witness that (well-formed!) expressions contain the same information
+whether we represent them as strings or as our little custom datatype.</p>
+
+<p>These types of bidirectional transformations are <em>extremely</em> common in programming. Hopefully
+that motivates the power of abstract algebra to help us think about and improve our programs.</p>
+
+<p>So let’s finish this out. Now to show our property (that we can evaluate expressions-as-strings),
+we have to show that our new custom datatype has the same property (that we can evaluate them).
+Now it’s easy;</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">eval</span><span class="p">(</span><span class="n">exp</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Op</span><span class="p">,</span> <span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+    <span class="n">match</span> <span class="n">exp</span><span class="p">[</span><span class="mi">1</span><span class="p">]:</span>
+        <span class="n">case</span> <span class="n">Add</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">exp</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">exp</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+        <span class="n">case</span> <span class="n">Times</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">exp</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">exp</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+</code></pre></div></div>
+
+<p>And of course we can recover the result as a string with <code class="language-plaintext highlighter-rouge">str</code>, if we want to.</p>
+
+<p>This kind of bidirectional transformation is called a <em>bijection</em>. In order to know that we have
+the same information both ways, we need to know that the transformations in each direction preserve
+the structure we are working with. Bijections don’t have to preserve structure, but sets don’t have
+any structure to preserve anyway. A bijection that <em>does</em> preserve structure is called an
+<em>isomorphism</em>, from the Greek <em>iso-</em>, meaning “same” and <em>morphous</em> meaning “form.”</p>
+
+<p>For sets, all bijections are isomorphisms. In abstract algebra, we care much more about isomorphisms
+than general bijections.</p>
+
+<h2 id="magmas-both-lava-and-trees">Magmas: Both Lava and Trees</h2>
+
+<p>The section title is mostly a joke about the more common usage of the term “magma,” don’t try
+and read too much into it.</p>
+
+<p>There’s only one arrow in the diagram to talk about here - we get magmas from sets.</p>
+
+<p>In order to get a magma from a set, we need to add an operation that operates on two elements
+of the set, and produces a third. This operation is typically written \(\cdot\).</p>
+
+<p>If our carrier set is \(S\), we can write the type of \(\cdot\) as \(\cdot : S \times S
+\to S\). For those unfamiliar, \(S \times S\) means the type of two things in \(S\), or a pair
+of things in \(S\). For example, \((1, 2) \in \mathbb N \times \mathbb N\). If \(x,y \in S\), we
+write \(\cdot(x, y)\) or equivalently (and preferably) \(x \cdot y\).</p>
+
+<p>The only property that a magma imposes on the operation is its type. It must work for <em>any</em> two
+elements of \(S\), and the result must also be an element of \(S\). The operation does <em>not</em> have
+to be associative, commutative, or anything else.</p>
+
+<p>Most of the structures we will look at later will subsume magmas, meaning that anything which models
+them is <em>also</em> a model of a magma. For the sake of example, though, let’s consider something which
+is a magma and <em>only</em> a magma: binary trees.</p>
+
+<p>A binary tree is a data structure where at any point, we either refer to two smaller binary trees,
+or to nothing. The operation \(\cdot\) combines its arguments as subtrees under a new node.
+Some examples of this magma:</p>
+
+<center><img src="/assets/abstract-algebra/basic-structures/magma-examples.svg" /></center>
+
+<p>Get out a piece of paper and consider what \(A \cdot B\) looks like. What about \(B \cdot A\)?</p>
+
+<p>They aren’t the same! That means that \(\cdot\) does not <em>commute</em>.</p>
+
+<p>What about \((A \cdot B) \cdot C\)? Compare that to \(A \cdot (B \cdot C)\). They also aren’t the same!
+This means that \(\cdot\) does not <em>associate</em>.</p>
+
+<p>The only property that we are guaranteed by a magma is <em>closure</em>: if \(a\) and \(b\) are in the magma,
+then \(a \cdot b\) exists and is also in the magma.</p>
+
+<h2 id="semigroupoids-honestly-these-never-come-up">Semigroupoids: Honestly, These Never Come Up</h2>
+
+<p>Despite the section header, these are worth talking about if only as a stepping stone.</p>
+
+<p>Once again, we’re going to imbue our carrier set \(S\) with a binary operation \(\cdot : S \times S \to S\).
+However, this time, we’re going to put a different requirement on it. Instead of requiring it to be <em>total</em>,
+we require it to <em>associate</em>. What that means is that there might be some elements of \(S\) for which \(\cdot\)
+is undefined.</p>
+
+<p>However, if \(a \cdot b\) exists, and \((a \cdot b) \cdot c\) exists, then both \(b \cdot c\) and
+\(a \cdot (b \cdot c)\) must <em>also</em> exist. Furthermore, \((a \cdot b) \cdot c = a \cdot (b \cdot c)\).</p>
+
+<p>We can see a semigroupoid as a directed graph by looking at the graph in a different way than we did for magma.</p>
+
+<p>This time, consider the nodes of the graph. There are arrows between them; let the set of all those arrows
+form our carrier set. Remember, sets can be of strange things! An arrow from node \(A\) to node \(B\) gives us
+a “path” to get from \(A\) to \(B\). There are <em>a lot</em> of notations used for this by different authors, and
+honestly I find most of them obscure<sup id="fnref:2" role="doc-noteref"><a href="#fn:2" class="footnote" rel="footnote">2</a></sup>. So let’s use a simple one: The arrow from \(A\) to \(B\) will
+literally be written \(A \to B\) :).</p>
+
+<p>Now we can define \(x \cdot y\) for two arrows \(x\) and \(y\). First of all, remember that \(\cdot\) does
+not have to be defined for every pair of arrows. So since arrows describe paths between nodes, let’s let
+\(\cdot\) be the operator which <em>combines</em> paths. That seems pretty natural, right?</p>
+
+<p>We define \((A \to B) \cdot (B \to C) = A \to C\). In order for a particular graph to to model a
+semigroupoid in this way, the arrow \(A \to C\) <em>must</em> exist. That’s not a property of semigroupoids though.
+It’s just a property of the way we have defined this model. Here’s a pair of examples of such semigroupoids.</p>
+
+<center>
+  <img src="/assets/abstract-algebra/basic-structures/semigroupoids.svg" />
+</center>
+
+<p>A very important facet of abstract algebra is apparent here: there are <em>many</em> things that fit the mold of
+“semigroupoids,” and two of them are shown here, but these two semigroupoids are <em>not</em> the same. Proving
+something about the first would not necessarily prove the same thing about the second, because they don’t
+contain the same information! In math-speak, these semigroupoids are not <em>isomorphic</em>.</p>
+
+<p>We could easily take some arbitrary set \(\{\) 🙂, 🙁, 😃 \(\}\) and define, again arbitrarily,
+that 😃 \(\cdot\) 🙁 = 🙂. The result is certainly a semigroupoid (there aren’t enough
+equations to even trigger the associativity requirement). But this semigroupoid is <em>isomorphic</em> to the first
+one above (why?). Since they carry the same information, we only have to talk about one of them. Graphs
+are easier to visualize, so we’re going to use them!</p>
+
+<p>In the second semigroupoid above, notice that \(2 \to 2\) and \(4 \to 4\) exist, because of the pair
+of arrows \(2 \to 4\) and \(4 \to 2\). We can take \((2 \to 4) \cdot (4 \to 2)\) to “round-trip” back to
+\(2\), and according to our definition, that means \(2 \to 2\) has to exist.</p>
+
+<p>We can also use the second semigroupoid to check that the way we defined the operation is actually associative. You can check that</p>
+
+\[\begin{aligned} ((1 \to 2) \cdot (2 \to 4)) \cdot (4 \to 3) &amp;= (1 \to 4) \cdot (4 \to 3)\\
+&amp;= 1 \to 3\\
+\\
+(1 \to 2) \cdot ((2 \to 4) \cdot (4 \to 3)) &amp;= (1 \to 2) \cdot (2 \to 3)\\
+&amp;= 1 \to 3\\
+\end{aligned}\]
+
+<p>Indeed, those are the same.</p>
+
+<p>However, it’s also quite apparent that \(\cdot\) does not commute. In fact, it fails to commute in the most
+spectacular fashion imaginable: not only does \((B \to C) \cdot (A \to B)\) fail to equal \((A \to B) \cdot (B \to C)\),
+it doesn’t even exist! We didn’t define the operation for arrows that don’t share an intermediate node, and the
+semigroupoid laws don’t say we have to.</p>
+
+<p>Since arrows describe paths between nodes, it’s pretty common to only draw the minimal number of arrows and leave
+the combined paths as implied. In the complex graph, we could omit arrows \(2 \to 2, 4 \to 4, 1 \to 3, 2 \to 3,\) and \(1 \to 4\).</p>
+
+<h2 id="small-categories-it-begins">Small Categories: It Begins</h2>
+
+<p>Small categories are where things really start getting interesting. For simplicity, I’m just going to call these
+categories. This is conceptually fine, but you can see the footnote to see what “small” means here if you want.<sup id="fnref:3" role="doc-noteref"><a href="#fn:3" class="footnote" rel="footnote">3</a></sup></p>
+
+<p>With semigroupoids, we saw that it was ocassionally necessary to have an arrow \(a \to a\), in order to make
+sure that the product of two arrows exists. When we have these arrows, we get the nice pair of equations</p>
+
+\[\begin{aligned}
+  (a \to a) \cdot (a \to b) &amp;= a \to b \\
+  (a \to b) \cdot (b \to b) &amp;= a \to b \\
+\end{aligned}\]
+
+<p>These are respectively called the left identity equation and the right identity equation. For the arrow
+\(a \to b\), the arrow \(a \to a\) is called a left identity and the arrow \(b \to b\) is called a right
+identity.</p>
+
+<p>A <em>category</em> is what we get if we <em>require</em> that these identity arrows exist. We add a pair of requirements
+to our operation:</p>
+
+<ol>
+  <li>For any element \(x\), there exists an element \(e_l\) such that \(e_l \cdot x = x\)</li>
+  <li>For any element \(x\), there exists an element \(e_r\) such that \(x \cdot e_r = x\)</li>
+</ol>
+
+<p>In our graph model<sup id="fnref:4" role="doc-noteref"><a href="#fn:4" class="footnote" rel="footnote">4</a></sup>, recall that we only required arrows to exist if they were necessary to “combine
+paths.” These two new requirements additionally require arrows to exist from every node to itself.
+Collectively, these requirements are called the “left and right identity laws.” We’re never going to want
+one without the other, so we’ll shorten that to just “the identity law,” and use that phrase to mean the
+pair of them together.</p>
+
+<p>Categories have the nice property that for any node in the graph, there is <em>definitely</em> an arrow pointing
+away from it, and an arrow pointing towards it. That means that when proving things about categories, we
+can freely say “pick an arrow pointing to \(b\)” or “pick an arrow from \(a\),” without running into the
+problems that this could cause with a semigroupoid.</p>
+
+<p>Other than our graph model, a pretty typical example of a category is that of functions from some type
+to itself. If we consider the collection of all functions \(f : S \to S\), we get a category. The operation
+is function composition. The (singular) identity is simply \(f(x) = x\), which is both a left and right
+identity to every other function in the category. Such functions are often referred to as <em>endomorphisms</em>,
+from the Greek root <em>endo-</em> meaning “within.” This structure is incidentally more than just a category.</p>
+
+<h2 id="semigroups-from-semigroupoids-the-graph-collapses">Semigroups (from Semigroupoids): The Graph Collapses</h2>
+
+<p>Every arrow in our original hierarchy<sup id="fnref:5" role="doc-noteref"><a href="#fn:5" class="footnote" rel="footnote">5</a></sup> represents adding a single new restriction to the operation \(\cdot\).
+This time, we’re taking a semigroupoid (which requires that the operation <em>associate</em>) and additionally require
+that the operation be <em>total</em>.</p>
+
+<p>In our graph view, this means we have to somehow define \((a \to b) \cdot (c \to d)\), and it’s not obvious how
+to do that. In fact, it seems there isn’t any reasonable way to do it at all!</p>
+
+<p>There’s one exception. If we allow our graph to have multiple arrows between the same nodes, then a graph
+with only one node and many arrows from that node to itself forms a semigroup. Since every arrow looks like
+\((a \to a)\), we can always define \(\cdot\). But now it’s not so obvious how this is useful.</p>
+
+<p>We could imagine that the singular node represents some set, and that each arrow represents
+some arbitrary function from that set to itself. This is <em>extremely</em> general, but it is a semigroup.
+Really, it’s a whole family of semigroups, because it will form a semigroup no matter which functions
+we choose from the set to itself. Notably, unlike the similar category example, we <em>don’t</em> have to have
+the identity function in our collection!</p>
+
+<p>Since semigroups are semigroupoids (and magmas), anything that we can prove about semigroupoids (or magmas)
+will also apply to semigroups, and therefore applies to this amazingly general structure of “composing
+functions from a set to itself.”</p>
+
+<h2 id="semigroups-from-magmas-just-change-equality">Semigroups (from Magmas): Just Change Equality</h2>
+
+<p>We can get an alternate view of semigroups by coming from Magmas. Magmas required the operation to
+be total. Semigroups additionally require the operation to associate.</p>
+
+<p>Looking back at <a href="/math/algebra/2022/07/17/basic-structures.html#magmas-both-lava-and-trees">the section on magmas</a>, we
+called two trees equivalent if they looked the same. This was the reason the operation didn’t associate.
+But what if we redefine equality, specifically so that \(a \cdot (b \cdot c) = (a \cdot b) \cdot c\)?
+No one says we <em>can’t</em> do this. What structure do we end up with?</p>
+
+<p>Since we can now shift the parentheses around arbitrarily, we can always move them as far to the left
+as we want. The result will be binary trees that look like this:</p>
+
+<center>
+  <img src="/assets/abstract-algebra/basic-structures/semigroup-chain.svg" />
+</center>
+
+<p>So we now say two trees are equivalent if we can rearrange their nodes (but without swapping the <em>order</em> -
+semigroups still aren’t commutative!) to move all the “interesting” nodes to the left, and they look the
+same after we’re done. If we wanted to worry about order, we could label the nodes at the bottom with numbers,
+but let’s keep it simple here and leave them as dots.</p>
+
+<p>We can see an easier criteria for equality based on that. Two of these semigroups are “the same” if they have
+the same number of nodes. That’s it!</p>
+
+<p>And since we can always adjust such a tree to whatever (tree) structure we like, the “structure” that the
+semigroup knows is just the order of the leaves at the bottom. That carries exactly the same information
+as an ordered list of the leaves!<sup id="fnref:6" role="doc-noteref"><a href="#fn:6" class="footnote" rel="footnote">6</a></sup> Notice though, that this model doesn’t support empty lists (yet).</p>
+
+<p>So by coming at semigroups from different angles, we are able to see two <em>completely</em> different views of
+the object. And yet amazingly, both views describe exactly the same thing. This is the power of abstract
+algebra at work. We can prove things about semigroups, mentally reasoning about them as nonempty lists, and
+as long as in practice we only use the semigroup laws, we will get the same results about semigroups as
+graphs for free! <em>Including</em> the semigroup of function compositions that we saw in the last section,
+which is seemingly entirely unrelated to the semigroups we are looking at now. In fact, they are one
+and the same!</p>
+
+<p>This relationship can be daunting. How can we conceptualize that they have the same structure?</p>
+
+<p>I think it is best to simply not try and find deeper meaning here. We’ve seen that what matters is
+the <em>properties</em> that they have in common. In both cases, we have a set, and a binary operation which is total and
+associative. This is all the relationship that they need.</p>
+
+<p>Rather than be confused how they can be the same, I think it suffices to see this core property that they
+share and simply sigh in awe.</p>
+
+<h2 id="more-to-come">More To Come</h2>
+
+<p>I’m going to leave this post off here to avoid it getting <em>too</em> long. In the next post we will take a brief
+look at unital magma and quasigroups. Then we’ll get to the interesting stuff that comes up in programming
+and in life all the time - monoids and groups.</p>
+
+<hr />
+
+<div class="footnotes" role="doc-endnotes">
+  <ol>
+    <li id="fn:1" role="doc-endnote">
+      <p>It is really important that we show the models contain the same information. We could have
+  two different models of a structure which <em>do not</em> contain the same information, and that difference
+  in information might make the properties true in one model but false in the other! <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:2" role="doc-endnote">
+      <p>The worst offender for newcomers is \(Hom(A, B)\) for \(A \to B\). This comes from category theory
+  and I won’t be using it here. But if you do see it in the wild, mentally rewrite it to \(A \to B\). <a href="#fnref:2" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:3" role="doc-endnote">
+      <p>Essentially, there’s a problem with the way we hand-wavily defined a set as a collection of anything.
+  We could define a set as “the collection of all objects with some property,” for example all numbers
+  that are natural, or all integers divisible by 3. But even worse, we can define sets of sets in some
+  ways that are straight-up impossible. The quintessential example is called Russel’s Paradox. The set
+  of “all sets that do not contain themselves” cannot exist. If it doesn’t contain itself, it should.
+  But if it contains itself, then it shouldn’t! This was a major problem in the formalization of math,
+  and modern set theory systems define sets in a way that prevents this. But category theorsists <em>really</em>
+  want to be able to talk about categories of categories in the most generic way possible. To solve this
+  problem, we distinguish between “small” categories, whose arrows (and objects) form sets in the modern
+  set-theory way, and “large” categories, whose arrows (and objects) are just defined by some property.
+  The latter collections are called “proper classes,” and generally a “class” is a collection of things
+  which <em>are not</em> classes. All this to say, the word “small” here solves a problem that we didn’t even
+  have to think about, so I’m just going to drop it in this post. <a href="#fnref:3" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:4" role="doc-endnote">
+      <p>The graph model is actually the standard model of categories. Categories are usually defined as having
+  <em>two</em> carrier sets, the graph nodes and the graph arrows, considered separately. But for our purposes
+  it’s really enough to consider just the arrows and assume that they point between distinguishable things.
+  Either way, if you had a different model of a category, it would be possible to transform it to the
+  graph model and only <em>lose</em> information, not gain anything. Category theorists say the graph model is
+  “universal,” but in our language, we’ll say graphs are “the free categories on graph nodes.” It
+  will be a while before we get into free structures, but it is one of my eventual goals in this post
+  category. <a href="#fnref:4" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:5" role="doc-endnote">
+      <p>Does that sound suspiciously like a category? Because it is! <a href="#fnref:5" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:6" role="doc-endnote">
+      <p>From a programming perspective, this relationship is what lets us turn programs (strings of words)
+  into richer <em>parse trees</em>. The programming language dictates what additional non-associative tree
+  structure to imbue the text with, but the original program needn’t care. It’s just a list! <a href="#fnref:6" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+  </ol>
+</div>]]></content><author><name></name></author><category term="math" /><category term="algebra" /><summary type="html"><![CDATA[If you haven’t seen the previous post in this series, and want an introduction to abstract algebra before getting into specific structures, you should check out What is Abstract Algebra, Anyway?.]]></summary></entry><entry><title type="html">What is Abstract Algebra, Anyway?</title><link href="https://maxkopinsky.com/math/algebra/2022/07/16/what-is-abstract-algebra.html" rel="alternate" type="text/html" title="What is Abstract Algebra, Anyway?" /><published>2022-07-16T21:00:00+00:00</published><updated>2022-07-16T21:00:00+00:00</updated><id>https://maxkopinsky.com/math/algebra/2022/07/16/what-is-abstract-algebra</id><content type="html" xml:base="https://maxkopinsky.com/math/algebra/2022/07/16/what-is-abstract-algebra.html"><![CDATA[<p>“Abstract Algebra” was a term that I frequently heard growing up in reference to difficult college-level math. When people want to make math sound scary, it’s a common go-to. I think this is just because it has the word “abstract” in the name. Certainly, no one who tried to scare me with it when I was young could actually tell me what it was.</p>
+
+<p>Is that because it truly is scary, or simply because they didn’t have access to good resources to learn it? We’re going to find out!</p>
+
+<p>In this mini-series I hope to approach Abstract Algebra from a simple angle, in terms of motivating examples and building up desirable properties. There will be little-to-no advanced math here. Equational reasoning skills will help, as may some previous exposure to proofs. This post is aimed at hobbyist or experienced programmers with a less formal mathematics background, or at interested pre-university mathematicians. Many motivating examples will be in terms of programming.</p>
+
+<p>This long introductory post aims to introduce the general concept of abstract algebra and motivate why we would want to use it.</p>
+
+<p>With all that out of the way, let’s get into the meat of it!</p>
+
+<h2 id="why-abstract-algebra">Why Abstract Algebra?</h2>
+
+<p>Indeed, why <em>math</em>? Mathematics gives us the tools to talk about various patterns we encounter every day. Algebra (the non-abstract kind) gives us the tools to talk about everyday constraints, like “What time do I have to leave my house to be at work at 9:00?” It can also talk about much more complicated, but still everyday problems, related to money, logistics, cooking, and just about anywhere else you might encounter an equals sign.</p>
+
+<p>Arithmetic gives us the tools to talk about various types of counting. For example, I know I have 12 cookies and 3 friends, and I want to count how many cookies each friend can get.</p>
+
+<p>Calculus gives us the tools to talk about rates and totals. How much does the circumference of a circle increase if you change the radius? What happens if you total up the lengths of the circumferences for circles of various radii?</p>
+
+<p>Geometry lets us talk about shapes without (necessarily) worrying about manipulating numbers.</p>
+
+<p>All of these things let us talk about concrete things, which we can touch and move around, or at least construct physical examples. Abstract algebra is tricky to view this way, because it is <em>abstract</em> by nature. Abstract algebra gives us the tools to talk about <em>structure</em> - what happens when we enforce certain rules on mathematical objects.</p>
+
+<p>But what does that even mean? Consider the natural numbers, \(\mathbb N\). If we don’t give them <em>structure</em>, we have a collection of weird symbols like \(3\) and \(42\) that we can’t manipulate. But we can give them a structure by declaring that they have an <em>order</em>. \(2\) comes after \(1\), \(3\) comes after \(2\), etc. Is there something special about this structure in particular? No, there isn’t. We could easily have put a different number first, for example. Or we could use completely different symbols, like emoji. Or why even stop at symbols - a stack of pennies has the same structure!</p>
+
+<p>So what we <em>really</em> gain from abstract algebra is the language to talk about three things:</p>
+
+<ol>
+  <li>Specific structures, like “the structure of \(\mathbb N\)”</li>
+  <li>Types of structures, such as “structures which can model counting”</li>
+  <li>Relationships between structures, such as how two seemingly different structures (like \(\mathbb N\) and a stack of pennies) are actually one and the same.</li>
+</ol>
+
+<p>The last one is where I find the real beauty in abstract algebra, and it lets us tie all sorts of different types of math together.</p>
+
+<h2 id="lets-get-into-it-what-is-a-structure">Let’s Get Into It: What is a Structure?</h2>
+
+<p>Now that we know what we’re talking about at a high level, let’s get a bit more specific. Obviously, as programmers or as mathematicians, we see these types of structures all the time. Programmers will recognize the stack of pennies as a linked list (or perhaps some other kind of list). But we can also talk about other shapes of structures entirely, so let’s get a bit more precise.</p>
+
+<p>Before we can talk about something have structure, we need to have, well, something. In our running example, the “something” is either \(\mathbb N\) or a collection of pennies. In either case, we have a collection of things - a <em>set</em>.</p>
+
+<p>Every “algebraic structure” is going to start with a set. This set is called the <em>domain</em> of the structure, or the <em>carrier set</em>. There are structures that have more than one domain, but we’re not going to talk about those in this post. In this post, we will only discuss <em>single-domain</em> structures.</p>
+
+<p>Then, we put structure on the set by defining (arbitrarily!) a <em>relationship</em> between the objects in the set. For our “natural number structure,” that relationship is the <em>followed-by</em> relation. \(2\) is <em>followed by</em> \(1\), etc. Now we ask ourselves what properties this structure has. We could list a few:</p>
+
+<ol>
+  <li>Every natural number is <em>followed by</em> another natural number.</li>
+  <li>\(0\) is special - there is no natural number \(n\) for which \(n\) is <em>followed by</em> \(0\).</li>
+  <li>For every natural number which is <em>not</em> \(0\), there is exactly one other natural number which it follows.</li>
+</ol>
+
+<p>In fact, these 3 properties exactly describe our structure. Here, we’re using our language in way #1 from above - we’re talking about a specific structure.</p>
+
+<p>Since these 3 properties exactly describe our structure, we should be able to state the same 3 properties for stacks of pennies:</p>
+
+<ol>
+  <li>For any stack of pennies, we can add another penny on top to get a taller stack.</li>
+  <li>The empty stack of pennies is special - there is no stack of pennies which we can add a penny to and end up with the empty stack.</li>
+  <li>For every stack of pennies which is not empty, there is exactly one stack of pennies which we can add a penny to get this one.</li>
+</ol>
+
+<p>These are the same 3 rules, just stated with slightly different wording. And they describe <em>exactly</em> the same structure, merely with a different carrier set.</p>
+
+<p>That means that anything we prove about stacks of pennies immediately applies to natural numbers as well - or to <em>anything else with this structure</em>. Thus what really matters is the properties that define our structure, and not the structure itself. Let’s rephrase our properties in a more general way.</p>
+
+<ol>
+  <li>For any element \(x\) of the domain, there is an element \(\sigma(x)\) which is also in the domain.</li>
+  <li>There is a special element \(0\) in the domain, and there is no \(x\) such that \(\sigma(x) = 0\).</li>
+  <li>For any element \(x \neq 0\) in the domain, there is exactly one element \(y\) in the domain such that \(\sigma(y) = x\).</li>
+</ol>
+
+<p>Now we refer to some generic “domain,” but we don’t actually care what it is. We only care that it has the structure dictated by these properties. These properties are commonly known as the “Peano axioms”<sup id="fnref:1" role="doc-noteref"><a href="#fn:1" class="footnote" rel="footnote">1</a></sup>.</p>
+
+<p>This structure is generically called the natural numbers, whether we use \(\mathbb N\) as the carrier set or stacks of pennies. I want to emphasize that our conceptual understanding of the structure comes from the properties, and not from the carrier set.</p>
+
+<p>The technical designation for this structure comes from the following facts about it:</p>
+
+<ol>
+  <li>The operation that dictates the structure, \(\sigma\) is <em>unary</em>, or takes one argument.</li>
+  <li>The operation distinguishes a particular element in the set, \(0\). Mathematicians call such operations “pointed.”</li>
+</ol>
+
+<p>So we would call the natural numbers a “pointed unary system.”</p>
+
+<h2 id="if-the-dress-fits-model-it">If the Dress Fits, Model It!</h2>
+
+<p>We’ve now taken a step <em>away</em> from concrete objects, and described how we talk about two things having the same structure. We define the structure’s properties, and show that both things satisfy those properties. We call these properties the <em>axioms</em> of the structure. When something concrete satisfies the axioms of a structure, we call it a <em>model</em> of that structure. It’s also pretty common to just call it the structure itself, so the set of pennies along with the “add a penny to the stack” operation may just be called the “penny system,” even though it’s the same system as the natural numbers.</p>
+
+<p>Whenever we prove something generic about the axioms, we’ve also proved that thing about <em>every</em> model of the axioms. Let’s see an example.</p>
+
+<p>The Peano Axioms we’ve been looking at describe <em>counting</em>. \(\sigma\), conceptually, is “count to the next number.” It turns out that anything with this structure also has a much more interesting structure. Using <em>counting</em>, we can describe <em>arithmetic</em>.</p>
+
+<p>Let’s propose some additional properties for addition:</p>
+
+<ol>
+  <li>For any two values \(x,y\), \(x + y\) exists.</li>
+  <li>If \(x + y = z\), then \(y + x = z\) as well.</li>
+  <li>If \((w + x) + y = z\), then \(w + (x + y) = z\) as well.</li>
+</ol>
+
+<p>Let’s suppose we have any model \((D, 0, \sigma)\) of the Peano axioms. This notation means that the carrier set is \(D\), along with the designated value \(0\) and the operation \(\sigma\) for counting. We can define addition as follows:</p>
+
+\[\begin{align} a + 0 &amp;= a, \\ a + \sigma(b) &amp;= \sigma(a + b). \end{align}\]
+
+<p>Now we want to check that it satisfies the properties we asked for. First, let’s suppose \(x,y \in D\). One of the two patterns above will fit \(x + y\), so we definitely have a definition for \(x + y\). Since (by axiom 1) \(\sigma(a + b)\) will always again be a natural number, we have that \(x + y\) does really exist.</p>
+
+<p>What about the second rule, which is usually called <em>commutivity</em>?</p>
+
+<p>First, let’s show that \(a + 0 = 0 + a\). If \(a = 0\), we’re done. So let’s assume that \(a \neq 0\).</p>
+
+\[\begin{aligned} 0 + a &amp;= 0 + \sigma(b) &amp; \text{By axiom 3} \\
+&amp;= \sigma(0 + b) &amp; \text{By the second pattern} \\
+&amp;= \sigma(b + 0) &amp; \text{Explained below} \\
+&amp;= \sigma(b) &amp; \text{By the first pattern} \\
+&amp;= a &amp; \text{By definition of } b\\
+&amp;= a + 0 &amp; \text{By the first pattern, applied in reverse} \end{aligned}\]
+
+<p>What about that step in the middle, where we used the fact that \(\sigma(0 + b) = \sigma(b + 0)\)? Doesn’t that rely on what we’re trying to prove?
+Well it does - but \(b\) is closer to \(0\) in the \(\sigma\)-chain than \(a\) is. So we could “unroll” the proof by writing out the steps for \(b\), and for \(b-1\), until we eventually terminate at \(0\). We know that we will eventually terminate, because our Axiom 3, or the <em>uniqueness axiom</em>, tells us that eventually, we will have to reach 0, and we know that our claim holds for 0. Formally, this reasoning is called <em>induction</em>.<sup id="fnref:2" role="doc-noteref"><a href="#fn:2" class="footnote" rel="footnote">2</a></sup></p>
+
+<p>To prove the general claim of \(x + y = y + x\), we would use a similar inductive step to show that \(x + \sigma(y) = \sigma(x) + y\), and then we would be able to “move” layers of \(\sigma\) from one side to the other until we get the balance correct. The details are left as an exercise.</p>
+
+<p>I’ll also leave proving the 3rd property of addition, <em>associativity</em>, as an exercise. It’s less annoying than commutativity.</p>
+
+<h2 id="so-what">So what?</h2>
+
+<p>So we’ve shown that any system that supports <em>counting</em> also supports <em>adding</em>. Why is that important?</p>
+
+<p>Addition is a <em>binary</em> operator. It takes two arguments, both natural numbers in this case, and produces a third natural number. Addition puts a much richer structure on the domain. Instead of only being able to say that \(3 \to 4\), \(4 \to 5\), and \(5 \to 6\), we can now make much broader, more comprehensive statements like \((3, 4) \to 7\). And this doesn’t only apply to numbers, but to <em>any</em> set that it makes sense to “count.” That’s a very powerful result!</p>
+
+<p>Some of the richest - and most practical - structures arise from single-domain, binary-operator systems. Mathematicians define a whole hierarchy of such structures, starting with no properties at all (a set with no operation) and gradually increasing the requirements of the operation to become more and more specific. The significant parts of this hierarchy look like this.</p>
+
+<p><img src="/assets/abstract-algebra/hierarchy.svg" /></p>
+
+<p>The structure we’ve been talking about here is a commutative monoid. As we continue to develop the language of abstract algebra, we will learn conceptually exactly what that means.</p>
+
+<p>Hopefully I’ve piqued your interest! In the next few posts we will describe each type of structure in the diagram and the arrows that it points to. That is, I want to describe each structure in terms of what it <em>adds</em> to something that we are already familiar with. As we get further down the line, we will see how identifying these types of structures can improve programs, clarify ideas, and help us make deep observations about the nature of (mathematical) existence.</p>
+
+<hr />
+
+<div class="footnotes" role="doc-endnotes">
+  <ol>
+    <li id="fn:1" role="doc-endnote">
+      <p>For simplicity, I’ve combined the fact that \(0\) exists with its special property. But technically these are two separate properties. If we don’t dictate that \(0\) must exist, then the empty set would satisfy all of the other properties! So the Peano axioms actually have <em>4</em> properties, with the first one being “0 is a natural number.” <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:2" role="doc-endnote">
+      <p>Typically, induction would be stated as a Peano Axiom. But the typical statements are all very difficult to parse and not conceptually enlightening. However, my handwavy description of “unrolling” the proof can be formalized. It turns out that defining that 0 is the “the smallest natural number,” in the way that we did, is equivalent to giving induction as an axiom. The details of the proof are outside the scope of this post. <a href="#fnref:2" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+  </ol>
+</div>]]></content><author><name></name></author><category term="math" /><category term="algebra" /><summary type="html"><![CDATA[“Abstract Algebra” was a term that I frequently heard growing up in reference to difficult college-level math. When people want to make math sound scary, it’s a common go-to. I think this is just because it has the word “abstract” in the name. Certainly, no one who tried to scare me with it when I was young could actually tell me what it was.]]></summary></entry></feed>

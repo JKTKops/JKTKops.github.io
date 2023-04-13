@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+<!-- Begin Jekyll SEO tag v2.8.0 -->
+<title>What are Monoids and Groups? | Max Kopinsky</title>
+<meta name="generator" content="Jekyll v4.2.2" />
+<meta property="og:title" content="What are Monoids and Groups?" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="In the last post, we explored unital magma, quasigroups, loops, and groupoids. Each structure arose by adding more restrictions to the binary operation of the structure." />
+<meta property="og:description" content="In the last post, we explored unital magma, quasigroups, loops, and groupoids. Each structure arose by adding more restrictions to the binary operation of the structure." />
+<link rel="canonical" href="https://maxkopinsky.com/math/algebra/2022/07/18/monoids-and-groups.html" />
+<meta property="og:url" content="https://maxkopinsky.com/math/algebra/2022/07/18/monoids-and-groups.html" />
+<meta property="og:site_name" content="Max Kopinsky" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-07-18T22:00:00+00:00" />
+<meta name="twitter:card" content="summary" />
+<meta property="twitter:title" content="What are Monoids and Groups?" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BlogPosting","dateModified":"2022-07-18T22:00:00+00:00","datePublished":"2022-07-18T22:00:00+00:00","description":"In the last post, we explored unital magma, quasigroups, loops, and groupoids. Each structure arose by adding more restrictions to the binary operation of the structure.","headline":"What are Monoids and Groups?","mainEntityOfPage":{"@type":"WebPage","@id":"https://maxkopinsky.com/math/algebra/2022/07/18/monoids-and-groups.html"},"url":"https://maxkopinsky.com/math/algebra/2022/07/18/monoids-and-groups.html"}</script>
+<!-- End Jekyll SEO tag -->
+
+    <link rel="stylesheet" href="/assets/css/style.css?v=">
+    <script src="https://code.jquery.com/jquery-1.12.4.min.js" integrity="sha256-ZosEbRLbNQzLpnKIkEdrPv7lOy9C27hHQ+Xp8a4MxAQ=" crossorigin="anonymous"></script>
+    <script src="/assets/js/respond.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <!--[if lt IE 8]>
+    <link rel="stylesheet" href="/assets/css/ie.css">
+    <![endif]-->
+    <!-- for mathjax -->
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({
+        extensions: [
+            "MathMenu.js",
+            "MathZoom.js",
+            "AssistiveMML.js",
+            "a11y/accessibility-menu.js"
+        ],
+        jax: ["input/TeX", "output/CommonHTML"],
+        loader: {load: ['[tex]/colortbl']},
+        TeX: {
+            packages: {'[+]': ['colortbl']},
+            extensions: [
+                "AMSmath.js",
+                "AMSsymbols.js",
+                "noErrors.js",
+                "noUndefined.js",
+            ]
+        }
+    });
+    </script>
+    <script type="text/javascript" async
+       src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML">
+    </script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+
+  </head>
+  <body>
+      <div id="header">
+        <nav>
+          <li class="fork"><a href="">View On GitHub</a></li>
+          
+        </nav>
+      </div><!-- end header -->
+
+    <div class="wrapper">
+
+      <section>
+        <div id="title">
+          <h1>Max Kopinsky</h1>
+          <p>Functional Programming, Formal Methods, Computer Architecture, and Math!</p>
+          <hr>
+        </div>
+
+        <h1>What are Monoids and Groups?</h1>
+
+        <p>In <a href="/math/algebra/2022/07/18/more-basics.html">the last post</a>, we explored
+unital magma, quasigroups, loops, and groupoids. Each structure arose by adding
+more restrictions to the binary operation of the structure.</p>
+
+<p><img src="/assets/abstract-algebra/hierarchy.svg" /></p>
+
+<p>When we looked at groupoids, we saw how the combination of restrictions can lead
+to generalized results about <em>all</em> groupoids, like the inverse of the inverse
+theorem, and the inverse of product theorem.</p>
+
+<p>In this post, we’re going to start looking at monoids, which have a set of properties
+satisfied by, well, nearly everything. In particular, monoids appear <em>everywhere</em>
+in programs.</p>
+
+<ul id="markdown-toc">
+  <li><a href="#monoids-from-categories-totality" id="markdown-toc-monoids-from-categories-totality">Monoids (From Categories): Totality</a></li>
+  <li><a href="#monoids-from-semigroups-identities" id="markdown-toc-monoids-from-semigroups-identities">Monoids (From Semigroups): Identities</a></li>
+  <li><a href="#monoids-from-unital-magma-association" id="markdown-toc-monoids-from-unital-magma-association">Monoids (From Unital Magma): Association</a></li>
+  <li><a href="#monoid-examples" id="markdown-toc-monoid-examples">Monoid Examples</a>    <ul>
+      <li><a href="#booleans" id="markdown-toc-booleans">Booleans</a></li>
+      <li><a href="#pointed-semigroups" id="markdown-toc-pointed-semigroups">Pointed Semigroups</a></li>
+      <li><a href="#lists" id="markdown-toc-lists">Lists</a></li>
+      <li><a href="#turing-machines" id="markdown-toc-turing-machines">Turing Machines</a>        <ul>
+          <li><a href="#why" id="markdown-toc-why">Why?</a></li>
+          <li><a href="#ability-to-generalize" id="markdown-toc-ability-to-generalize">Ability to Generalize</a></li>
+        </ul>
+      </li>
+    </ul>
+  </li>
+  <li><a href="#groups" id="markdown-toc-groups">Groups</a></li>
+  <li><a href="#one-final-property-getting-to-work" id="markdown-toc-one-final-property-getting-to-work">One Final Property: Getting To Work</a></li>
+  <li><a href="#conclusion" id="markdown-toc-conclusion">Conclusion</a></li>
+</ul>
+
+<h1 id="monoids-from-categories-totality">Monoids (From Categories): Totality</h1>
+
+<p>Categories didn’t have a requirement that multiplication be total. For many pairs
+of arrows, it doesn’t make sense to chain them together. It only works if they have
+the same intermediate node in the graph.</p>
+
+<p>Let’s require the multiplication to be total.</p>
+
+<p>For that to work, every pair of arrows is going to have to go to and from the same
+graph node. As a result, there is only one graph node (and there are multiple arrows
+from that node to itself).</p>
+
+<p>This gives us a view of monoids as categories. We have identites (every arrow is
+an identity, in this view).</p>
+
+<p>However this view isn’t super useful, because every arrow is the same. This model
+kind of sucks. We could modify how we look at the model to make it more interesting.
+Or… we could let the same thing happen by starting somewhere else.</p>
+
+<h1 id="monoids-from-semigroups-identities">Monoids (From Semigroups): Identities</h1>
+
+<p>Semigroups have associative, total multiplication, but they don’t have to have
+identities. Our example of a finite semigroup was to start with some arbitrary set
+\(A\). Then we considered a set of functions, \(F\), where each function \(f \in F\)
+is from \(A\) to \(A\). Function composition in any set is total and associative.</p>
+
+<p>But the only function which is an identity under composition is the function that
+maps any \(a : A\) to itself, which we write as either \(f(a) = a\), or \(a \mapsto a\).
+We didn’t require that this function be in \(F\) when we considered semigroups.</p>
+
+<p>For monoids, we’re going to require it.</p>
+
+<p>The identity function is a function that “does nothing.” This is spectacularly useful.
+Not only do we know that there is an identity that works for every function in \(F\),
+we know what it is. And if we need to conjure up an element of our monoid to use somewhere,
+we can always safely use this identity because multiplication by it will never “mess up”
+another value.</p>
+
+<h1 id="monoids-from-unital-magma-association">Monoids (From Unital Magma): Association</h1>
+
+<p>Starting from an operation which has an identity and which is total, we can get a monoid
+by also requiring it to be associative. I unfortunately don’t have a good way to
+visualize this change. Please let me know if you do!</p>
+
+<p>Correspondingly, a structure which is both a unital magma <em>and</em> a semigroup will always
+be a monoid.</p>
+
+<h1 id="monoid-examples">Monoid Examples</h1>
+
+<h2 id="booleans">Booleans</h2>
+
+<p>Let’s consider some examples. Let’s start with the set \(\mathbb B = \{ true, false \}\). Let’s pick
+the common operation “or”:</p>
+
+\[\begin{aligned}
+false &amp;\| false &amp;= false \\
+false &amp;\| true  &amp;= true  \\
+true  &amp;\| false &amp;= true  \\
+true  &amp;\| true  &amp;= true  \\
+\end{aligned}\]
+
+<p>As we can see, \(false\) certainly acts as the identity on either side. Operating false
+on false gives false, false on true gives true. We can check that it’s associative
+(exercise). And, the above table shows that it’s total.</p>
+
+<p>This gives us the monoid \((\mathbb B, false, \|)\), or “booleans with or.”</p>
+
+<p>Sometimes, there’s more than one way to imbue a set with a monoid structure. What if
+we pick a different operation?</p>
+
+\[\begin{aligned}
+false\ &amp; \&amp;\&amp;\ false &amp;= false \\
+false\ &amp; \&amp;\&amp;\ true  &amp;= false \\
+true\  &amp; \&amp;\&amp;\ false &amp;= false \\
+true\  &amp; \&amp;\&amp;\ true  &amp;= true  \\
+\end{aligned}\]
+
+<p>Now \(true\) is an identity<sup id="fnref:1" role="doc-noteref"><a href="#fn:1" class="footnote" rel="footnote">1</a></sup>. This gives us a different monoid over the same domain,
+\((\mathbb B, true, \&amp;\&amp;)\), or “booleans with and.”</p>
+
+<h2 id="pointed-semigroups">Pointed Semigroups</h2>
+
+<p>Notice that we can recover a semigroup from any monoid by simply “forgetting” the identity
+element. If we neglect to point out that \(true\) is the identity of \(\&amp;\&amp;\), we get the
+<em>semigroup</em> \((\mathbb B, \&amp;\&amp;)\).</p>
+
+<p>There’s a way that we can describe functions between <em>structures</em> - the function
+from monoids to semigroups, defined by \(F(D, e, *) = (D, *)\), is known as a <em>forgetful
+functor</em>. I’ll probably have some future posts exploring this idea further, as it can be
+combined with category theory to do some pretty general things.</p>
+
+<p>The nicest thing it can do is <em>be reversed</em>. If we have some semigroup, we can attach a new
+element \(e\) to the domain of the semigroup and define \(e\) to be the identity. This new
+\(e\) is called a “point,”<sup id="fnref:2" role="doc-noteref"><a href="#fn:2" class="footnote" rel="footnote">2</a></sup> and it might not be distinguishable from every element already
+in the domain. If the semigroup already had an identity which was forgotten, then we can prove
+that \(e\) and the identity are one and the same.</p>
+
+<p>Regardless, sometimes we have a semigroup without an identity, and this construction allows us
+to summon one out of thin air.</p>
+
+<p>Let’s consider a little bit of C code for a moment.</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">struct</span> <span class="n">SomeSemigroup</span><span class="p">;</span> <span class="c1">// opaque</span>
+
+<span class="n">SomeSemigroup</span> <span class="o">*</span><span class="nf">times</span><span class="p">(</span><span class="n">SomeSemigroup</span> <span class="n">x</span><span class="p">,</span> <span class="n">SomeSemigroup</span> <span class="n">y</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p>By assumption, <code class="language-plaintext highlighter-rouge">times</code> here is an associative operation, which may or may not have
+an identity element. We don’t know. But we can <em>extend</em> the operation with a new
+identity as follows;</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">SomeSemigroup</span> <span class="o">*</span><span class="n">id</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
+
+<span class="n">SomeSemigroup</span> <span class="o">*</span><span class="nf">times_extension</span><span class="p">(</span><span class="n">SomeSemigroup</span> <span class="o">*</span><span class="n">x</span><span class="p">,</span> <span class="n">SomeSemigroup</span> <span class="o">*</span><span class="n">y</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">x</span> <span class="o">==</span> <span class="n">id</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">y</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="n">y</span> <span class="o">==</span> <span class="n">id</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">x</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="k">else</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">times</span><span class="p">(</span><span class="o">*</span><span class="n">x</span><span class="p">,</span> <span class="o">*</span><span class="n">y</span><span class="p">);</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>This new semigroup is now a monoid. The identity is <code class="language-plaintext highlighter-rouge">NULL</code>. It may be that there was
+already some other identity in semigroup; in this case, <code class="language-plaintext highlighter-rouge">NULL</code> is functionally
+indistinguishable from that other identity within the semigroup structure.</p>
+
+<p>A common example of a semigroup in programming languages is non-empty array(list)s. We can
+append any two arrays to get a third, and this append operation is associative. We have an
+additional (useful) structure that we can lookup any element in an array and get something
+meaningful back, since they are never empty.</p>
+
+<p>But sometimes, when initializing an array for an algorithm, for example, it’s truly useful
+to be able to say that it is initially empty. We can recover a structure where that is
+allowed by appending a new point to our array semigroup, the null pointer, and extending
+the concatenation operation as above.</p>
+
+<p>Now even if the language allowed empty arrays (as most do), the empty array and the null
+pointer are functionally indistinguishable. You can’t lookup values from either of them,
+and appending either one to another array will result in that other array.</p>
+
+<p>We say that the null pointer and the empty array are <em>isomorphic</em>. They carry the same
+information. In this case, that is no information at all! We can easily write a pair
+of functions to witness the isomorphism<sup id="fnref:3" role="doc-noteref"><a href="#fn:3" class="footnote" rel="footnote">3</a></sup>. One of them sends the empty array to <code class="language-plaintext highlighter-rouge">NULL</code>,
+the other sends <code class="language-plaintext highlighter-rouge">NULL</code> to the empty array. While we generally have a <em>structural</em>
+definition of equality in programs, what we often truly want is <em>informational</em> equality,
+where two objects are equal if they are isomorphic.</p>
+
+<p>The exact meaning of isomorphic can differ with respect to context. Sometimes the structure
+is information that we care about (for example, trees). Thinking about what exactly equality
+means for a particular datatype and implementing it correctly can avoid major headache-
+inducing bugs. The concept of monoids (indeed, unital magma) tells us that if we have
+two different objects which are <em>both</em> the identities of a type’s core operation, then we should
+probably be writing a <em>normalizing</em> function, which replaces one with the other, because they
+must be functionally indistinguishable.</p>
+
+<h2 id="lists">Lists</h2>
+
+<p>What if we have some unknown type \(T\), and we want to imbue it with a monoid structure?
+Perhaps we want to be able to put off deciding what binary operation to use until later,
+if there are several choices. Or perhaps there’s no reasonable choice at all, but we
+still want to be able to put things together.</p>
+
+<p>One common example of this is validation, or <em>parsing</em>. We may encounter an error while
+validating a piece of data, but we don’t want our program to just fail immediately.</p>
+
+<p>Instead, we want to combine all the errors that we discover during the entire process of
+validation (or at least, as far as we can go), so that the user can get as much relevant
+information as possible back from our tool. It’s not really meaningful to “combine” errors.
+We could append the callstacks and append the messages, but that doesn’t tell anyone anything.
+If anything, it’s actively confusing. Instead, we just want some monoid structure that leaves
+individual errors alone.</p>
+
+<p>We can always construct such a structure. Instead of considering elements of \(T\) itself,
+we consider elements of a new type, \(L(T)\). \(L(T)\) is the type of lists containing
+elements of type \(T\). Each element of \(T\) corresponds exactly to a singleton list
+containing it. We call the function from \(T \to L(T)\) an <em>injection</em>, because it “injects”
+elements of \(T\) into this monoid structure. For example, the definition might be as
+simple as <code class="language-plaintext highlighter-rouge">inject(t) = List.singleton(t)</code>, in a language where this syntax makes sense.</p>
+
+<p>Now the monoid multiplication is list concatenation, which as above is associative. If we
+need to conjure up an element from nowhere, we have to be able to do that <em>without</em> relying
+on the existence of things in \(T\). Perhaps we are initializing our parser and we need
+some initial value for the set of errors. It’s perfectly safe to choose the empty list,
+because it is the identity of this monoid and the concatenation with non-empty lists
+later won’t cause weird things to happen to our structure.</p>
+
+<p>This is a very real example of why being able to conjure up a “nothing” element of a type
+is extremely useful!</p>
+
+<p>If you’re a programmer, you’ve probably written loops like this before:</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">bool</span> <span class="n">flag</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+<span class="k">while</span> <span class="p">(</span><span class="n">someCondition</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">do_some_work</span><span class="p">();</span>
+    <span class="n">flag</span> <span class="o">=</span> <span class="n">flag</span> <span class="o">||</span> <span class="n">checkFlag</span><span class="p">();</span>
+<span class="p">}</span>
+<span class="k">if</span> <span class="p">(</span><span class="n">flag</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">clean_up</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p><code class="language-plaintext highlighter-rouge">flag</code> here is acting in the \((\mathbb B, false, \|)\) monoid. If the body of the loop
+is also implementing some type of monoidal behavior<sup id="fnref:4" role="doc-noteref"><a href="#fn:4" class="footnote" rel="footnote">4</a></sup>, we could <em>combine</em> these two
+monoids and possibly clean up our code.</p>
+
+<h2 id="turing-machines">Turing Machines</h2>
+
+<p>I want to leave off this overview of monoids with a quick proof that every program can be
+described by the structure of some monoid.</p>
+
+<p>Firstly, it is well known that any program can be represented by a Turing Machine. It’s generally
+fairly easy to find such a machine, because the semantics of the programming language are
+usually defined in terms of an abstract machine, which is then implemented in terms of some
+assembly language, which is itself (usually) quite close to a Turing Machine on its own.</p>
+
+<p>A Turing Machine is its own kind of structure, generally written \((Q, \Gamma, b, \Sigma,
+\delta, q_0, F)\). In order, we have a set of states, a set of symbols that we can write to
+some kind of memory, a designated “blank symbol,” which appears in any memory cell that has
+not yet been written to, a subset of \(\Gamma\) representing the symbols which can be in
+memory before we start (the “program input”), a set of <em>transitions</em>, an initial state,
+and a set of final states.</p>
+
+<p>The Turing Machine starts in the “initial configuration,” where the memory has some input
+symbols in it, the machine is pointed at a particular memory cell, and is in the initial state.
+It executes by using the <em>transitions</em>, which describe for each state, how to use the value
+of memory currently being looked at to decide how to modify the current memory cell and switch
+to a different one, as well as possibly also switching states.</p>
+
+<p>In any configuration of the turing machine, we can apply some sequence of transitions to get
+to a new configuration. A record of configurations that we move through between the initial
+state and a final state is called an <em>accepting history</em>.</p>
+
+<p>A Turing Machine accepts an input (computes a result for that input) if and only if an accepting
+history exists. An accepting history is a chain of states, all of which are valid. So given any
+two states in an accepting history, we can find a (composition of) transition(s) which moves
+one to the other.</p>
+
+<p>This structure is monoidal. We have the set \(C\) of configurations for our machine \(M\).
+We can define, for any input \(w \in L(\Sigma)\), the function
+\(T_w : C \to C\). \(T_w(c)\) tells us which state \(c'\) we will end up in if the “input” in memory
+<em>begins with</em> \(w\); if it does not begin with \(w\),
+then the result is whichever state \(M\) uses to reject an input.</p>
+
+<p>The set \(T = \{ T_w \ | \ w \in L(\Sigma) \}\) is the domain of our monoid. The multiplication
+is the composition of these transition operators. The identity transition is \(T_\emptyset\),
+because every input can be seen as <em>beginning with</em> the empty string. Any two of these can be
+composed, and composition is associative, hence we have a monoid.</p>
+
+<p>This is called the <em>transition monoid</em> of a machine. It formalizes the notion that any computation
+can be broken down into steps which are independent of each other, and the results of those steps
+can be combined according to some monoidal structure to produce the result of the program.</p>
+
+<h4 id="why">Why?</h4>
+
+<p>Why is that useful? After all, the construction is, well, rather obtuse. It does tell us exactly
+how to <em>find</em> such a monoid, but that monoid doesn’t exactly lend itself to pretty code. An example
+of the constructed monoid might look like this, in a dialect of C extended with nested functions
+that are safe to return pointers to<sup id="fnref:6" role="doc-noteref"><a href="#fn:6" class="footnote" rel="footnote">5</a></sup>.</p>
+
+<div class="language-c highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">typedef</span> <span class="kt">void</span><span class="o">*</span><span class="p">(</span><span class="o">*</span><span class="n">step</span><span class="p">)(</span><span class="kt">void</span><span class="o">*</span><span class="p">)</span> <span class="n">ConstructedMonoid</span><span class="p">;</span>
+
+<span class="kt">void</span> <span class="o">*</span><span class="nf">id_step</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">state</span><span class="p">)</span> <span class="p">{</span>
+    <span class="k">return</span> <span class="n">state</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="n">step</span> <span class="o">*</span><span class="nf">times_step</span><span class="p">(</span><span class="n">step</span> <span class="o">*</span><span class="n">step1</span><span class="p">,</span> <span class="n">step</span> <span class="o">*</span><span class="n">step2</span><span class="p">)</span> <span class="p">{</span>
+    <span class="n">step</span> <span class="o">*</span><span class="n">new_step</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">state</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">step2</span><span class="p">(</span><span class="n">step1</span><span class="p">(</span><span class="n">state</span><span class="p">))</span>
+    <span class="p">}</span>
+    <span class="k">return</span> <span class="n">new_step</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="n">step</span> <span class="o">*</span><span class="n">id</span> <span class="o">=</span> <span class="n">id_step</span><span class="p">;</span>
+<span class="n">step</span> <span class="o">*</span><span class="p">(</span><span class="o">*</span><span class="n">times</span><span class="p">)(</span><span class="n">step</span><span class="o">*</span><span class="p">,</span><span class="n">step</span><span class="o">*</span><span class="p">)</span> <span class="o">=</span> <span class="n">times_step</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p>Here the monoid is the set of all functions which take a pointer and return a pointer. The
+pointer is presumed to point to any relevant information that the program needs to continue.
+The identity is the function which returns the state unchanged, and the multiplication composes
+two steps.</p>
+
+<p>Naively, this is stupid. We don’t gain anything by writing our program this way, and really
+it just makes the program more opaque. Chances are we were <em>already</em> breaking the problem down
+into smaller steps in a more readable fashion.</p>
+
+<p>This idea becomes <em>useful</em> when the monoid is isomorphic to a simpler monoid. In that case,
+we can disregard the elements-are-functions notion, and replace the functions with the elements
+of the simpler monoid. Each step of our program becomes as simple as generating the next monoid
+element, with regards to the globally-available input but <em>without</em> caring about the results
+or side effects of other steps. Then we multiply all the resulting monoid elements together
+and the result falls out.</p>
+
+<p>We used this pattern when writing an autograder for a course taught in Haskell, which requires
+some functions to be a written in a certain recursive style. The grader is implemented as a
+a function converts a stack of nested function definitions into a flattened list of bindings
+along with all the other names in scope. This transformation is implemented by (recusively)
+translating each individual definition into an element of a monoid and then multiplying them
+together as we recurse back out. Each element of the flattened list of bindings is then checked
+<em>individually</em> for violations of the desired property and the results are monoidally combined
+into the final result.</p>
+
+<h4 id="ability-to-generalize">Ability to Generalize</h4>
+
+<p>Any monoid corresponding to a turing machine in this way ends up being isomorphic to another
+monoid which is an instance of a special kind of monoid called a <em>monad</em>. Monads are studied
+in category theory, which we’re not going to get into here, but some programming languages
+make them explicitly representable. This makes it possible to express programs by describing
+how to translate inputs into elements of the monoid and combining them together.</p>
+
+<p>A monoid in this way represents the structure of the programming environment. What that means
+is that it represents what side effects can be performed by the functions which return
+elements of the monoid - throwing errors, manipulating a shared state, things like that.</p>
+
+<p>By generalizing such a program from a specific monoid to “any monoid which contains that
+monoid as a substructure,” we can generalize the environments in which a function will work.
+Rather than having a function which works “with my database,” we can have a function which
+works “with <em>some</em> database.” We can then easily test our programs with a mock database,
+while using a real database for our actual business environment. Since it’s the same code
+running in both cases, we can be confident that the tests passing means our logic is sound,
+even though the underlying database is different.</p>
+
+<p>This is related to other programming patterns like dependency injection. There’s a very
+rich space of programming constructs and patterns that can be explored here to find
+ways to write cleaner programs. Haskell has a collection of libraries known as
+<em>algebraic effect libraries</em> which provide implementations of this idea.</p>
+
+<p>We’ll explore this concept further in future posts, I hope, but now back to the math.</p>
+
+<h1 id="groups">Groups</h1>
+
+<p>A group is a monoid with inverses. Alternatively, it is a total groupoid, or an associative
+loop.</p>
+
+<p>A monoid \((D, e, *)\) is a group if for any \(x \in D\), there is an element \(x^{-1} \in D\)
+such that \(x * x^{-1} = e\). We can easily prove that inverses are unique, which is a good
+exercise.</p>
+
+<p>Many, many things that we say in day-to-day mathematics form groups. For example, the monoid
+\((\mathbb Z, 0, +)\) is also a group, because for any \(x \in \mathbb Z\), we have
+\(-x \in \mathbb Z\), and \(x + (-x) = 0\).</p>
+
+<p>However, the monoid \((\mathbb N, 0, +)\) is <em>not</em> a group, because negative numbers aren’t
+in \(\mathbb N\). The monoid \((\mathbb Z, 1, *)\) is also not a group, because for example,
+there’s no inverse of 2. There’s a mechanism by which we could extend this monoid into a group,
+and the result would be \(\mathbb Q\). Perhaps in the future I’ll explore this construction in
+another series of posts, which would probably build up to how we can define \(\mathbb R\)
+<em>algebraicly</em>.<sup id="fnref:7" role="doc-noteref"><a href="#fn:7" class="footnote" rel="footnote">6</a></sup></p>
+
+<p>As discussed in the last post, Rubik’s Cubes are associated with a group where every
+element of the group is a sequence of moves. We can get this group by starting with
+all of the 90 degree clockwise rotations of a single face (there are 6 such moves)
+and then “closing” the set under concatenation: add to the set every move or sequence of moves
+which can be obtained by concatenating two (sequences of) moves in the set. Repeat until
+nothing new gets added.</p>
+
+<p>We can check that inverses exist in this group. Call the clockwise rotation of the front face
+\(F\). We can check that \(F^{-1} = F * F * F\), which we can also write \(F^3\). This means
+that \(F\) can be undone by performing \(F\) three more times; \(F^{-1} * F = F^4 = e\).
+The groupoid properties then tell us that (since products are always defined in a group),
+if we have the sequence of moves \(A * B\), then \((A * B)^{-1}\) is nothing other than
+\(B^{-1} * A^{-1}\). This corresponds to undoing sequence \(AB\) by first undoing \(B\),
+and then undoing \(A\). That’s exactly what we expect!</p>
+
+<p>From here, we could develop a rich theory of groups, called <em>group theory</em>, and apply it
+to the study of a huge variety of real groups that appear in mathematics. Eventually, I’d
+like to develop some of that theory in a sequence of posts, and build up to an understandable
+proof of the fact that quintic polynomials are not solvable in general in terms of addition,
+multiplication, and \(n\)th roots.</p>
+
+<h1 id="one-final-property-getting-to-work">One Final Property: Getting To Work</h1>
+
+<p>One other property that we frequently ask of binary operations is that they <em>commute</em>. That
+is, they satisfy the restriction that \(x * y = y * x\).</p>
+
+<p>If we have a monoid with this property, we call it a <em>commutative monoid</em>. If we have a group
+with this property, we call it an <em>abelian group</em>. Most of the examples we’ve discussed so
+far are commutative, including the boolean monoids, and the additive group. The list monoid
+is <em>not</em> commutative, because order matters in lists. In contrast, the <em>set</em> monoid is commutative,
+because sets are unordered. The transition monoids of state machines are not commutative.</p>
+
+<p>If you have a Rubik’s Cube handy, check that the Rubik’s cube group is not abelian. We could
+loosen our restriction a little bit, and ask the following. Given some group \((G, e, *)\),
+what is the largest subset \(C \subseteq G\) such that for any \(z \in C, g \in G\), we have
+that \(z * g = g * z\)? We say that every element of \(C\) <em>commutes</em> with every element of \(G\).</p>
+
+<p>We can prove that this set \(C\), called the <em>center</em> of \(G\), is itself a group:</p>
+
+<ol>
+  <li>\(C\) has an identity element, because for any \(g \in G\), \(e * g = g * e\), so \(e \in C\).</li>
+  <li>The restriction of \(*\) from \(G\) to \(C\), \(*_C : C \times C \to C\), is total. Consider two elements
+\(y,z \in C\) and some \(g \in G\). Then we have that</li>
+</ol>
+
+\[\begin{aligned}
+(y * z) * g &amp;= y * (z * g) &amp; \text{Associative} \\
+&amp;= y * (g * z) &amp; z \in C \\
+&amp;= (g * z) * y &amp; y \in C \\
+&amp;= g * (z * y) &amp; \text{Associative} \\
+&amp;= g * (y * z) &amp; y,z \in C\\
+\end{aligned}\]
+
+<p>so \(y * z\) is also in \(C\).</p>
+
+<ol>
+  <li>If \(z \in C\), then \(z^{-1} \in C\) as well:</li>
+</ol>
+
+\[\begin{aligned}
+z^{-1} * g &amp;= (z^{-1} * g) * e &amp; \text{Identity} \\
+&amp;= (z^{-1} * g) * (z * z^{-1}) &amp; \text{Product of Inverse} \\
+&amp;= z^{-1} * (g * z) * z^{-1}   &amp; \text{Association} \\
+&amp;= z^{-1} * (z * g) * z^{-1}   &amp; z \in C \\
+&amp;= (z^{-1} * z) * (g * z^{-1}) &amp; \text{Association} \\
+&amp;= e * (g * z^{-1})            &amp; \text{Product of Inverse} \\
+&amp;= g * z^{-1}                  &amp; \text{Identity} \\
+\end{aligned}\]
+
+<p>Since \(C\) is a subset of \(G\), and \((C, e, *)\) is still a group, we call \((C, e, *)\) a
+<em>subgroup</em> of \((G, e, *)\) and we write \(C &lt; G\).</p>
+
+<p>The center of a group is nice because it is the largest subgroup which is abelian. In some
+groups, the center is trivial, meaning it contains only the identity.</p>
+
+<p>I’ll end this post with something that I consider to be a good thought exercise: is the
+center of the Rubik’s Cube group trivial? If not, how big is it?</p>
+
+<p>By developing some group theory, we could fairly easily prove an answer to this question.</p>
+
+<h1 id="conclusion">Conclusion</h1>
+
+<p>In this series of posts, we introduced the general concepts of each of the major <em>single-sorted,
+binary-operator</em> algebraic structures.  We saw how they arise from adding increasingly stringent
+constraints to the binary operator, and attached some examples to each of the weird names.</p>
+
+<p>I hope that abstract algebra feels approachable from here. We can use it to achieve general
+results which we can then apply to specific scenarios to get results for free. A further treatment
+of abstract algebra would explore some more important structures, notably <em>rings</em>, <em>fields</em>,
+and <em>vector fields</em>. These structures are nothing more than adding some new requirements to our
+set.</p>
+
+<p>We can improve programs, by implementing the results as very general functions and then
+applying the general functions to specific scenarios, achieving great degrees of code re-use
+and understandability. Simply by seeing a reference to a common general function, we can
+immediately understand the broad strokes of what the function is doing, even if we don’t yet
+understand all the specifics of the structure we’re applying it on.</p>
+
+<p>Most likely, my next posts will be about computer hardware, specifically superscalar out-of-order
+processing and how we can use the visual digital logic simulator <a href="https://www.google.com/url?sa=t&amp;rct=j&amp;q=&amp;esrc=s&amp;source=web&amp;cd=&amp;cad=rja&amp;uact=8&amp;ved=2ahUKEwj_4eXQuoP5AhVohIkEHeC1DwEQFnoECBMQAQ&amp;url=https%3A%2F%2Fstore.steampowered.com%2Fapp%2F1444480%2FTuring_Complete%2F&amp;usg=AOvVaw3zW9DEhcM5CdezAukGNxTo">Turing Complete</a>
+to explore the different components of such systems and how they work together.</p>
+
+<p>Further down the line, future posts will explore some more group theory, and some more direct
+application of abstract algebra to programming in Haskell. I want to explore so-called
+<em>free structures</em>, and how we can use them to describe computations that build other
+computations, a technique called <em>higher-order programming</em>. We’ve seen some free structures
+in these posts already, though I didn’t explicitly call them out<sup id="fnref:8" role="doc-noteref"><a href="#fn:8" class="footnote" rel="footnote">7</a></sup>. I also alluded to higher-order
+programming via <em>effects</em> earlier in this post, but there are other neat things we can do
+with the technique that don’t seem to get much exposure.</p>
+
+<hr />
+
+<div class="footnotes" role="doc-endnotes">
+  <ol>
+    <li id="fn:1" role="doc-endnote">
+      <p>Remember from the last post, we proved that identites are unique in unital magma.
+  Since monoids <em>are</em> unital magma, identities are unique in monoids too. So 
+  <strong>without checking this fact</strong>, we immediately know that \(true\) is <em>the only</em>
+  identity. For the remainder of the post, I’ll say “the identity” of a monoid, instead
+  of “an identity.” <a href="#fnref:1" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:2" role="doc-endnote">
+      <p>In the original post in this overview series, I mentioned that distinguished elements
+  of structures are always called points, and structures that have any are called “pointed.” <a href="#fnref:2" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:3" role="doc-endnote">
+      <p>As discussed in <a href="/math/algebra/2022/07/17/basic-structures.html#sets-setting-the-stage">Setting the Stage</a> <a href="#fnref:3" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:4" role="doc-endnote">
+      <p>We’ll see in a moment that it always is. <a href="#fnref:4" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:6" role="doc-endnote">
+      <p>C++ has such a construct, but I very strongly dislike C++, so this is what we get.
+  In a later post, we will review these concepts through the lens of Haskell, where this
+  structure will turn out to be… quite familiar. <a href="#fnref:6" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:7" role="doc-endnote">
+      <p>That is, in terms of the properties that the set should have. What might those
+  properties even be, and how can we construct a set that has those properties if it is necessarily
+  uncoutably infinite? <a href="#fnref:7" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+    <li id="fn:8" role="doc-endnote">
+      <p>Specifically, our example of magma was the free magma on binary tree nodes, linked lists
+  (the semigroups that we got by making the magma associative) are the free semigroups on
+  linked list nodes, and general lists containing things of type \(T\) are the free monoids
+  on \(T\).</p>
+
+      <p>In a deep sense, the composition of functions that we saw when expressing programs as
+  monoids described how to take a list of steps to perform and flatten it into a single
+  long step that composes all the elements of the list. By generalizing over more interesting
+  composition operators (which tend to arise from the “more interesting” monoids that
+  we may be lucky enough to be isomorphic to), we can again arrive at a free monoid, this time
+  over programs themselves. These free monoids are called <em>free monads</em> and form the basis
+  for programming via effects. <a href="#fnref:8" class="reversefootnote" role="doc-backlink">&#8617;</a></p>
+    </li>
+  </ol>
+</div>
+
+
+        <div class="PageNavigation">
+            
+            <hr>
+            
+            
+            
+            <div class="left">
+                <div>Previous</div>
+                <a href="/math/algebra/2022/07/18/more-basics.html">More Basic Algebraic Structures</a>
+            </div>
+            
+            
+        </div>
+
+        <div id="credits">
+          <span class="credits left">Project maintained by <a href=""></a></span>
+          <span class="credits right">Hosted on GitHub Pages &mdash; Theme by <a href="https://twitter.com/michigangraham">mattgraham</a></span>
+        </div>
+ 
+      </section>
+
+    </div>
+
+    
+  </body>
+</html>
